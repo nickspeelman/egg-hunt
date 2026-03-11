@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Egg Hunt MVP</title>
+
+    <!-- Leaflet (no API key required) -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+
+    <!-- App CSS -->
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>🥚 Egg Hunt MVP</h1>
+      </header>
+
+      <div class="mapWrap">
+        <div id="map"></div>
+
+        <div id="radarOverlay" class="hidden" aria-hidden="true">
+          <canvas id="radarCanvas"></canvas>
+          <button id="radarClose" class="btn">Close</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <div class="pill">Player: <strong id="playerName">—</strong></div>
+          <div class="pill">Score: <strong id="score">0</strong></div>
+          <div class="pill">Revealed: <strong id="revealedCount">0</strong></div>
+
+          <button class="btn btn--radar" id="radarBtn" title="Radar sweep (PRIMARY only)">
+            📡 Radar
+          </button>
+
+          <button
+            class="btn btn--right"
+            id="resetPlayerBtn"
+            title="Clear local player and re-register"
+          >
+            Reset player
+          </button>
+        </div>
+
+        <div class="row" id="lootRow">
+          <div class="pill">Loot: <strong id="lootInvCount">0/0</strong></div>
+          <div id="lootChips" class="lootChips" aria-label="Active loot effects"></div>
+          <button class="btn btn--small" id="lootUseBtn" title="Use loot from inventory (PRIMARY only)">Use loot</button>
+        </div>
+
+        <div class="row">
+          <div class="pill">Filter:</div>
+
+          <label class="pill filterPill">
+            <span class="mono">Color</span>
+            <select id="filterColor" class="mono filterSelect">
+              <option value="">ALL</option>
+              <option value="RED">RED</option>
+              <option value="BLUE">BLUE</option>
+              <option value="YELLOW">YELLOW</option>
+            </select>
+          </label>
+
+          <label class="pill filterPill">
+            <span class="mono">Pattern</span>
+            <select id="filterPattern" class="mono filterSelect">
+              <option value="">ALL</option>
+              <option value="SOLID">SOLID</option>
+              <option value="DOT">DOT</option>
+              <option value="STRIPE">STRIPE</option>
+              <option value="CROWN">CROWN</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="status" id="status">
+          <span class="mono">Initializing…</span>
+        </div>
+
+        <div class="small">
+          Tip: eggs only appear when you’re within the reveal radius. Tap an egg marker to claim.
+        </div>
+      </div>
+    </div>
+
+        <!-- App modal -->
+    <div id="appModal" class="appModal hidden" aria-hidden="true">
+      <div class="appModal__backdrop" data-modal-close></div>
+
+      <div
+        class="appModal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="appModalTitle"
+        aria-describedby="appModalBody"
+      >
+        <div class="appModal__header">
+          <h2 id="appModalTitle" class="appModal__title">Message</h2>
+        </div>
+
+        <div id="appModalBody" class="appModal__body"></div>
+
+        <div id="appModalInputWrap" class="appModal__inputWrap hidden">
+          <input
+            id="appModalInput"
+            class="appModal__input"
+            type="text"
+            autocomplete="off"
+          />
+        </div>
+
+        <div id="appModalActions" class="appModal__actions"></div>
+      </div>
+    </div>
+
+    <div id="loadingOverlay" class="loadingOverlay hidden" aria-hidden="true">
+      <div class="loadingCard" role="status" aria-live="polite" aria-busy="true">
+        <div id="loadingText" class="loadingText">Working…</div>
+        <div class="loadingBar">
+          <div class="loadingBar__indeterminate"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leaflet JS (place near end so HTML loads first) -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <!-- App JS -->
+    <script src="./js/config.js"></script>
+    <script src="./js/app.js"></script>
+  </body>
+</html>
