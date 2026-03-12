@@ -1108,7 +1108,7 @@ function upsertEggMarker(egg) {
     : '<button id="claim_' + egg.eggId + '" class="claim-btn">Claim</button>';
 
   const popupHtml =
-    "<b>Egg " + eggLabel_(egg) + "</b><br/>" +
+    "<b>" + eggLabel_(egg) + "</b><br/>" +
     "~" + egg.distanceMeters + "m away<br/><br/>" +
     claimUi;
 
