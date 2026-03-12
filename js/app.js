@@ -73,8 +73,8 @@ function eggSizeForZoom_(zoom, pattern) {
 }
 
 function eggLabel_(egg) {
-  const c = String(egg.color || "RED").toUpperCase();
-  const p = String(egg.pattern || "SOLID").toUpperCase();
+  const c = properCase_(egg.color || "RED");
+  const p = properCase_(egg.pattern || "SOLID");
   return c + " " + p;
 }
 
@@ -237,6 +237,11 @@ function escapeHtml_(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function properCase_(s) {
+  s = String(s || "").toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function modalSetVisible_(visible) {
@@ -1319,7 +1324,9 @@ async function claimEgg(eggId) {
 
     // Success message
     const label =
-      out.color && out.pattern ? out.color + " " + out.pattern : out.rarity || "Egg";
+      out.color && out.pattern
+        ? properCase_(out.color) + " " + properCase_(out.pattern)
+        : properCase_(out.rarity || "Egg");
 
     let lootMsg = "";
     if (out.loot) {
