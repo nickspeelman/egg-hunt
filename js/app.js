@@ -1080,8 +1080,11 @@ function updateYouOnMap(p) {
 
   if (accuracyCircle) accuracyCircle.bringToBack();
 
-    // Draw/update claim + reveal rings around current position
+  // Draw/update claim + reveal rings around current position
   updateRangeRings_(latlng);
+
+  // Refresh popup distances for already-revealed eggs
+  refreshEggMarkerDistances_();
 
   setStatus(
     '<span class="ok">GPS OK</span> - ' +
@@ -1094,6 +1097,35 @@ function updateYouOnMap(p) {
 // -----------------------------
 // Eggs
 // -----------------------------
+
+function buildEggPopupHtml_(marker) {
+  const d = lastPos
+    ? Math.round(map.distance(
+        [lastPos.lat, lastPos.lng],
+        [marker._eggLat, marker._eggLng]
+      ))
+    : Math.round(Number(marker._eggDistanceMeters || 0));
+
+  const claimUi = (teamId && isViewer_())
+    ? '<div class="small"><span class="bad">Primary device required</span></div>'
+    : '<button id="claim_' + marker._eggId + '" class="claim-btn">Claim</button>';
+
+  return (
+    "<b>" + eggLabel_({ color: marker._eggColor, pattern: marker._eggPattern }) + "</b><br/>" +
+    "~" + d + "m away<br/><br/>" +
+    claimUi
+  );
+}
+
+function refreshEggMarkerDistances_() {
+  if (!map || !lastPos) return;
+
+  eggMarkers.forEach(function(m) {
+    m.setPopupContent(buildEggPopupHtml_(m));
+  });
+}
+
+
 function upsertEggMarker(egg) {
   if (eggMarkers.has(egg.eggId)) return;
 
@@ -1104,24 +1136,25 @@ function upsertEggMarker(egg) {
     return;
   }
 
-  const m = L.marker([egg.lat, egg.lng], { icon: eggIcon_(egg.color, egg.pattern, map.getZoom()) }).addTo(map);
+  const m = L.marker(
+    [egg.lat, egg.lng],
+    { icon: eggIcon_(egg.color, egg.pattern, map.getZoom()) }
+  ).addTo(map);
+
+  m._eggId = egg.eggId;
+  m._eggLat = Number(egg.lat);
+  m._eggLng = Number(egg.lng);
   m._eggColor = egg.color;
   m._eggPattern = egg.pattern;
+  m._eggDistanceMeters = Number(egg.distanceMeters || 0);
 
-  const claimUi = (teamId && isViewer_())
-    ? '<div class="small"><span class="bad">Primary device required</span></div>'
-    : '<button id="claim_' + egg.eggId + '" class="claim-btn">Claim</button>';
-
-  const popupHtml =
-    "<b>" + eggLabel_(egg) + "</b><br/>" +
-    "~" + egg.distanceMeters + "m away<br/><br/>" +
-    claimUi;
-
-  m.bindPopup(popupHtml);
+  m.bindPopup(buildEggPopupHtml_(m));
 
   m.on("popupopen", function() {
+    m.setPopupContent(buildEggPopupHtml_(m));
     applyPopupScale_();
-    const btn = document.getElementById("claim_" + egg.eggId);
+
+    const btn = document.getElementById("claim_" + m._eggId);
 
     if (btn && !(teamId && isViewer_())) {
       btn.onclick = async function() {
@@ -1131,7 +1164,7 @@ function upsertEggMarker(egg) {
             delayMs: 150
           },
           async function() {
-            await claimEgg(egg.eggId);
+            await claimEgg(m._eggId);
           }
         );
       };
