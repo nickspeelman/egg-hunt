@@ -50,12 +50,57 @@
           </button>
         </div>
 
-        <div class="row" id="lootRow">
-          <div class="pill">Loot: <strong id="lootInvCount">0/0</strong></div>
-          <div id="lootChips" class="lootChips" aria-label="Active loot effects"></div>
-          <button class="btn btn--small" id="lootUseBtn" title="Use loot from inventory (PRIMARY only)">Use loot</button>
-        </div>
+             <div class="kitPanel" id="kitPanel" aria-label="Egg Hunter Kit">
+          <div class="kitPanel__header">
+            <div class="pill">Egg Hunter Kit</div>
+          </div>
 
+          <div class="kitGrid">
+            <div class="kitSlot" data-slot="binoculars">
+              <div class="kitSlot__iconWrap" aria-hidden="true">
+                <img class="kitSlot__iconImg" src="./assets/binoculars.png" alt="" />
+              </div>
+              <div class="kitSlot__label">Binoculars</div>
+              <div class="kitSlot__item" id="kit_binoculars_name">—</div>
+              <div class="kitSlot__bonus" id="kit_binoculars_bonus">No bonus</div>
+            </div>
+
+            <div class="kitSlot" data-slot="boots">
+              <div class="kitSlot__iconWrap" aria-hidden="true">
+                <img class="kitSlot__iconImg" src="./assets/boots.png" alt="" />
+              </div>
+              <div class="kitSlot__label">Boots</div>
+              <div class="kitSlot__item" id="kit_boots_name">—</div>
+              <div class="kitSlot__bonus" id="kit_boots_bonus">No bonus</div>
+            </div>
+
+            <div class="kitSlot" data-slot="scanner">
+              <div class="kitSlot__iconWrap" aria-hidden="true">
+                <img class="kitSlot__iconImg" src="./assets/scanner.png" alt="" />
+              </div>
+              <div class="kitSlot__label">Scanner</div>
+              <div class="kitSlot__item" id="kit_scanner_name">—</div>
+              <div class="kitSlot__bonus" id="kit_scanner_bonus">No bonus</div>
+            </div>
+
+            <div class="kitSlot" data-slot="antenna">
+              <div class="kitSlot__iconWrap" aria-hidden="true">
+                <img class="kitSlot__iconImg" src="./assets/antenna.png" alt="" />
+              </div>
+              <div class="kitSlot__label">Antenna</div>
+              <div class="kitSlot__item" id="kit_antenna_name">—</div>
+              <div class="kitSlot__bonus" id="kit_antenna_bonus">No bonus</div>
+            </div>
+
+            <div class="kitSlot" data-slot="basket">
+              <div class="kitSlot__iconWrap" aria-hidden="true">
+                <img class="kitSlot__iconImg" src="./assets/journal.png" alt="" />
+              </div>
+              <div class="kitSlot__label">Field Log</div>
+              <div class="kitSlot__item" id="kit_basket_name">—</div>
+              <div class="kitSlot__bonus" id="kit_basket_bonus">No bonus</div>
+            </div>
+          </div>
         <div class="row">
           <div class="pill">Filter:</div>
 

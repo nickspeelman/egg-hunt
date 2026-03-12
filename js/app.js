@@ -400,6 +400,214 @@ function setTopStats() {
   $("revealedCount").textContent = String(eggMarkers.size);
 }
 
+function renderKitHudPlaceholder_() {
+  const slots = ["binoculars", "boots", "scanner", "antenna", "basket"];
+  slots.forEach(function(slot) {
+    const nameEl = $("kit_" + slot + "_name");
+    const bonusEl = $("kit_" + slot + "_bonus");
+    if (nameEl) nameEl.textContent = "Loading…";
+    if (bonusEl) bonusEl.textContent = "Loading bonus…";
+  });
+}
+
+
+
+function formatKitBonus_(slotOrItem, maybeItem) {
+  let slot = "";
+  let item = null;
+
+  if (typeof slotOrItem === "string") {
+    slot = slotOrItem;
+    item = maybeItem || null;
+  } else {
+    item = slotOrItem || null;
+    slot = String((item && item.slot) || "");
+  }
+
+  if (!item) return "No bonus";
+
+  const mag = Number(item.magnitude || 0);
+
+  if (slot === "binoculars") {
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% reveal radius" : "Base reveal radius";
+  }
+
+  if (slot === "boots") {
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% claim radius" : "Base claim radius";
+  }
+
+  if (slot === "scanner") {
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% radar range" : "Base radar range";
+  }
+
+  if (slot === "antenna") {
+    return mag > 0
+      ? "+" + Math.round(mag) + " radar ping" + (Math.round(mag) === 1 ? "" : "s")
+      : "1 radar ping";
+  }
+
+  if (slot === "basket") {
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% egg points" : "Base egg points";
+  }
+
+  return "No bonus";
+}
+
+function renderKitFromState_(equipment) {
+  const slots = ["binoculars", "boots", "scanner", "antenna", "basket"];
+
+  slots.forEach(function(slot) {
+    const nameEl = $("kit_" + slot + "_name");
+    const bonusEl = $("kit_" + slot + "_bonus");
+    if (!nameEl || !bonusEl) return;
+
+    const item = equipment && equipment[slot];
+
+    if (!item) {
+      nameEl.textContent = "—";
+      bonusEl.textContent = "No equipment";
+      return;
+    }
+
+    nameEl.textContent = item.name || "Unknown";
+    bonusEl.textContent = formatKitBonus_(slot, item);
+  });
+}
+
+function equipmentSlotMeta_(slot) {
+  const map = {
+    binoculars: { label: "Binoculars", icon: "🔭" },
+    boots: { label: "Boots", icon: "🥾" },
+    scanner: { label: "Scanner", icon: "🎒" },
+    antenna: { label: "Antenna", icon: "📡" },
+    basket: { label: "Field Log", icon: "📓" }
+  };
+  return map[String(slot || "")] || { label: String(slot || "Equipment"), icon: "🎁" };
+}
+
+function equipmentOfferTitle_(offer) {
+  const meta = equipmentSlotMeta_(offer && offer.slot);
+  const cmp = String((offer && offer.comparison) || "").toUpperCase();
+
+  if (cmp === "DUPLICATE") {
+    return meta.icon + " Duplicate " + meta.label + " Found";
+  }
+  return meta.icon + " New " + meta.label + " Found";
+}
+
+function equipmentOfferButtons_(offer) {
+  const cmp = String((offer && offer.comparison) || "").toUpperCase();
+  const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
+  const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
+
+  if (cmp === "DUPLICATE") {
+    return [
+      {
+        label: "Convert to " + incomingSellValue + " points",
+        value: "KEEP_CURRENT",
+        className: "btn btn--primary"
+      }
+    ];
+  }
+
+  if (cmp === "DOWNGRADE") {
+    return [
+      {
+        label: "Keep Current (+" + incomingSellValue + " points)",
+        value: "KEEP_CURRENT",
+        className: "btn"
+      },
+      {
+        label: "Equip New (+" + equippedSellValue + " points)",
+        value: "EQUIP_NEW",
+        className: "btn btn--primary"
+      }
+    ];
+  }
+
+  return [
+    {
+      label: "Keep Current (+" + incomingSellValue + " points)",
+      value: "KEEP_CURRENT",
+      className: "btn"
+    },
+    {
+      label: "Equip New",
+      value: "EQUIP_NEW",
+      className: "btn btn--primary"
+    }
+  ];
+}
+
+function renderEquipmentOfferHtml_(offer) {
+  const meta = equipmentSlotMeta_(offer && offer.slot);
+  const cmp = String((offer && offer.comparison) || "").toUpperCase();
+  const item = (offer && offer.item) || {};
+  const equipped = (offer && offer.equipped) || null;
+  const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
+  const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
+
+  let comparisonText = "Choose which item to keep.";
+  if (cmp === "UPGRADE") comparisonText = "This looks better than your current gear.";
+  if (cmp === "DOWNGRADE") comparisonText = "This is weaker, but you can still swap if you want the points.";
+  if (cmp === "DUPLICATE") comparisonText = "Your current gear is identical.";
+
+  let noteHtml = "";
+  if (cmp === "DUPLICATE") {
+    noteHtml =
+      '<div class="small">Keeping your current ' + escapeHtml_(meta.label) +
+      ' converts the duplicate into <strong>' + incomingSellValue + ' points</strong>.</div>';
+  } else if (cmp === "DOWNGRADE") {
+    noteHtml =
+      '<div class="small">' +
+      'Keep Current: <strong>+' + incomingSellValue + ' points</strong><br>' +
+      'Equip New: <strong>+' + equippedSellValue + ' points</strong> from your currently equipped item' +
+      '</div>';
+  } else {
+    noteHtml =
+      '<div class="small">Keep Current converts the new item into <strong>' +
+      incomingSellValue + ' points</strong>.</div>';
+  }
+
+  return (
+    '<div style="display:grid;gap:12px;">' +
+      '<div>' +
+        '<div style="font-weight:700;">' + escapeHtml_(meta.label) + '</div>' +
+        '<div class="small">' + escapeHtml_(comparisonText) + '</div>' +
+      '</div>' +
+
+      '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;">' +
+        '<div class="small">New Item</div>' +
+        '<div style="font-weight:700;">' + escapeHtml_(item.name || "Unknown item") + '</div>' +
+        '<div class="small">' + escapeHtml_(formatKitBonus_(item)) + '</div>' +
+      '</div>' +
+
+      (
+        equipped
+          ? (
+              '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;">' +
+                '<div class="small">Currently Equipped</div>' +
+                '<div style="font-weight:700;">' + escapeHtml_(equipped.name || "Unknown item") + '</div>' +
+                '<div class="small">' + escapeHtml_(formatKitBonus_(equipped)) + '</div>' +
+              '</div>'
+            )
+          : ""
+      ) +
+
+      noteHtml +
+    '</div>'
+  );
+}
+
+async function respondEquipmentOffer_(offerId, decision) {
+  return api("equipment_offerRespond", {
+    offerId: offerId,
+    decision: decision,
+    playerId: playerId,
+    teamId: teamId
+  });
+}
+
 function isTeamMode_() { return !!teamId; }
 function isPrimary_() { return String(teamRole || "").toUpperCase() === "PRIMARY"; }
 function isViewer_() { return isTeamMode_() && !isPrimary_(); }
@@ -482,6 +690,7 @@ function updateRadarBtnState_() {
 }
 
 let lastLootOfferIdSeen = localStorage.getItem("eggHunt_lastLootOfferId") || "";
+let lastEquipmentOfferIdSeen = localStorage.getItem("eggHunt_lastEquipmentOfferId") || "";
 
 // Keep a local snapshot of the last loot/team state rendered to the HUD.
 // Use this for "Use loot" instead of forcing a fresh poll right before prompting.
@@ -496,6 +705,7 @@ let lastTeamState_ = null;
 
 // Guardrails for UI races
 let lootFlowActive_ = false;
+let equipmentOfferFlowActive_ = false;
 let pauseTeamStatePolling_ = false;
 
 function fmtMs_(ms) {
@@ -593,6 +803,71 @@ async function maybeHandleLootOffer_(st) {
     await modalAlert_((out && out.error) || "Loot offer response failed.", "Loot");
   }
 }
+
+
+async function maybeHandleEquipmentOffer_(offer) {
+  console.log("[equipmentOffer] handler called:", offer);
+
+  if (equipmentOfferFlowActive_) {
+    console.log("[equipmentOffer] skipped: flow already active");
+    return;
+  }
+
+  if (!offer || !offer.offerId) {
+    console.log("[equipmentOffer] skipped: missing offer/offerId");
+    return;
+  }
+
+  const offerId = String(offer.offerId);
+  const effectiveSeen = localStorage.getItem("eggHunt_lastEquipmentOfferId") || "";
+  lastEquipmentOfferIdSeen = effectiveSeen;
+
+  console.log("[equipmentOffer] seen:", effectiveSeen, "incoming:", offerId);
+
+  if (offerId === effectiveSeen) {
+    console.log("[equipmentOffer] skipped: already seen");
+    return;
+  }
+
+  equipmentOfferFlowActive_ = true;
+  pauseTeamStatePolling_ = true;
+
+  try {
+    const decision = await showModal_({
+      title: equipmentOfferTitle_(offer),
+      html: renderEquipmentOfferHtml_(offer),
+      buttons: equipmentOfferButtons_(offer)
+    });
+
+    if (!decision) {
+      console.log("[equipmentOffer] no decision returned");
+      return;
+    }
+
+    const out = await respondEquipmentOffer_(offerId, decision);
+
+    if (!out || !out.ok) {
+      await modalAlert_((out && out.error) || "Equipment offer response failed.", "Egg Hunter Kit");
+      return;
+    }
+
+    lastEquipmentOfferIdSeen = offerId;
+    localStorage.setItem("eggHunt_lastEquipmentOfferId", offerId);
+    console.log("[equipmentOffer] resolved:", decision, offerId);
+
+    await pollTeamState_({
+      skipLootOffer: true,
+      skipEquipmentOffer: true
+    });
+  } catch (err) {
+    console.error("[equipmentOffer] modal failed:", err);
+    throw err;
+  } finally {
+    equipmentOfferFlowActive_ = false;
+    pauseTeamStatePolling_ = false;
+  }
+}
+
 // -----------------------------
 // Player registration
 // -----------------------------
@@ -905,9 +1180,18 @@ async function pollTeamState_(options) {
 
   lastTeamState_ = st;
   renderLootHud_(st);
+  renderKitFromState_(st.equipment || {});
+
+  console.log("[teamState] pendingLootOffer top-level:", out.pendingLootOffer);
+  console.log("[teamState] pendingLootOffer in state:", st.pendingLootOffer);
+  console.log("[teamState] full out:", out);
 
   if (!options.skipLootOffer) {
     maybeHandleLootOffer_(st).catch(function(){});
+  }
+
+  if (!options.skipEquipmentOffer) {
+    maybeHandleEquipmentOffer_(st.pendingLootOffer).catch(function(){});
   }
 
   return st;
@@ -977,88 +1261,108 @@ async function claimEgg(eggId) {
     return;
   }
 
-  const out = await api("game_claimEgg", {
-    playerId: playerId,
-    teamId: teamId,
-    eggId: eggId,
-    lat: lastPos.lat,
-    lng: lastPos.lng
-  });
+  const prevPause = pauseTeamStatePolling_;
+  pauseTeamStatePolling_ = true;
 
-  // If backend tells us the claim radius, store it and refresh the ring immediately.
-  if (out && Number.isFinite(Number(out.claimMeters))) {
-    lastClaimMeters = Number(out.claimMeters);
-    updateRangeRings_([lastPos.lat, lastPos.lng]);
-  }
+  try {
+    const out = await api("game_claimEgg", {
+      playerId: playerId,
+      teamId: teamId,
+      eggId: eggId,
+      lat: lastPos.lat,
+      lng: lastPos.lng
+    });
 
-  // Handle errors
-  if (!out || !out.ok) {
-    if (out && out.tooFar) {
-      await modalAlert_(
-        "Too far! You're " +
-          out.distanceMeters +
-          "m away (need <= " +
-          out.claimMeters +
-          "m).",
-        "Claim Egg"
-      );
+    // If backend tells us the claim radius, store it and refresh the ring immediately.
+    if (out && Number.isFinite(Number(out.claimMeters))) {
+      lastClaimMeters = Number(out.claimMeters);
+      updateRangeRings_([lastPos.lat, lastPos.lng]);
+    }
+
+    // Handle errors
+    if (!out || !out.ok) {
+      if (out && out.tooFar) {
+        await modalAlert_(
+          "Too far! You're " +
+            out.distanceMeters +
+            "m away (need <= " +
+            out.claimMeters +
+            "m).",
+          "Claim Egg"
+        );
+        return;
+      }
+      await modalAlert_((out && out.error) || "Claim failed.", "Claim Egg");
       return;
     }
-    await modalAlert_((out && out.error) || "Claim failed.", "Claim Egg");
-    return;
-  }
 
-  // Server says it's already claimed
-  if (out.alreadyClaimed) {
-    await modalAlert_("You already claimed this egg.", "Claim Egg");
-    return;
-  }
-
-  // Update score
-  if (typeof out.teamScore === "number") {
-    score = out.teamScore;
-  } else {
-    score = (score || 0) + (out.points || 0);
-  }
-  localStorage.setItem("eggHunt_score", String(score));
-  setTopStats();
-
-  // Remove marker from map
-  const m = eggMarkers.get(eggId);
-  if (m) map.removeLayer(m);
-  eggMarkers.delete(eggId);
-  setTopStats();
-
-  // Success message
-  const label =
-    out.color && out.pattern ? out.color + " " + out.pattern : out.rarity || "Egg";
-
-  let lootMsg = "";
-  if (out.loot) {
-    if (out.loot.kind === "INVENTORY" && out.loot.item) {
-      const item = out.loot.item;
-
-      lootMsg = "\nLoot drop: " + (item.name || item.lootId || "Loot");
-
-      if (item.effectType) {
-        lootMsg += "\nEffect: " + item.effectType;
-      }
-
-      if (Number.isFinite(Number(item.durationSec))) {
-        lootMsg += "\nDuration: " + Number(item.durationSec) + "s";
-      }
-    } else if (out.loot.kind === "OFFER" && out.loot.item) {
-      const item = out.loot.item;
-      lootMsg = "\nLoot found: " + (item.name || item.lootId || "Loot");
-    } else {
-      lootMsg = "\nLoot drop!";
+    // Server says it's already claimed
+    if (out.alreadyClaimed) {
+      await modalAlert_("You already claimed this egg.", "Claim Egg");
+      return;
     }
-  }
 
-  await modalAlert_(
-    "Claimed (" + label + ") +" + out.points + " points!" + lootMsg,
-    "Egg Claimed"
-  );
+    // Update score
+    if (typeof out.teamScore === "number") {
+      score = out.teamScore;
+    } else {
+      score = (score || 0) + (out.points || 0);
+    }
+    localStorage.setItem("eggHunt_score", String(score));
+    setTopStats();
+
+    // Remove marker from map
+    const m = eggMarkers.get(eggId);
+    if (m) map.removeLayer(m);
+    eggMarkers.delete(eggId);
+    setTopStats();
+
+    // Success message
+    const label =
+      out.color && out.pattern ? out.color + " " + out.pattern : out.rarity || "Egg";
+
+    let lootMsg = "";
+    if (out.loot) {
+      if (out.loot.kind === "INVENTORY" && out.loot.item) {
+        const item = out.loot.item;
+
+        lootMsg = "\nLoot drop: " + (item.name || item.lootId || "Loot");
+
+        if (item.effectType) {
+          lootMsg += "\nEffect: " + item.effectType;
+        }
+
+        if (Number.isFinite(Number(item.durationSec))) {
+          lootMsg += "\nDuration: " + Number(item.durationSec) + "s";
+        }
+      } else if (out.loot.kind === "OFFER" && out.loot.item) {
+        const item = out.loot.item;
+        lootMsg = "\nLoot found: " + (item.name || item.lootId || "Loot");
+      } else {
+        lootMsg = "\nLoot drop!";
+      }
+    }
+
+    await modalAlert_(
+      "Claimed (" + label + ") +" + out.points + " points!" + lootMsg,
+      "Egg Claimed"
+    );
+
+    if (teamId) {
+      const st = await pollTeamState_({
+        skipLootOffer: true,
+        skipEquipmentOffer: true
+      });
+
+      if (st && st.pendingLootOffer) {
+        await maybeHandleEquipmentOffer_(st.pendingLootOffer);
+      }
+    }
+  } 
+  
+  finally {
+    pauseTeamStatePolling_ = prevPause;
+  }
 }
 
 function popupMetricsForZoom_(z) {
@@ -1540,6 +1844,7 @@ async function boot() {
   initMap();
   applyPopupScale_();
   setTopStats();
+  renderKitHudPlaceholder_();
 
   setStatus('<span class="mono">Map initialized... waiting for player + GPS</span>');
 
