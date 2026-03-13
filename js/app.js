@@ -83,8 +83,8 @@ function hunterSizeForZoom_(zoom) {
   // but still clearly in the same visual scale family.
   const eggSz = eggSizeForZoom_(z, "SOLID");
 
-  const w = Math.round(eggSz.w * 1.15);
-  const h = Math.round(w * 1.15);
+  const w = Math.round(eggSz.w * 1.3);
+  const h = Math.round(w * 1.3);
 
   return {
     w: Math.max(20, Math.min(96, w)),
@@ -262,6 +262,79 @@ function escapeHtml_(s) {
 function properCase_(s) {
   s = String(s || "").toLowerCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatBonusPercent_(multiplier) {
+  return "+" + Math.round(Number(multiplier || 0) * 100) + "%";
+}
+
+function buildClaimScoreHtml_(label, out, lootMsg) {
+  const sb = out && out.scoreBreakdown ? out.scoreBreakdown : null;
+
+  if (!sb) {
+    return escapeHtml_(
+      "Claimed (" + label + ")\n\nTotal points: " + Number(out && out.points || 0)
+    ).replace(/\n/g, "<br>");
+  }
+
+  const firstClaimBonusPoints = Number(sb.firstClaimBonusPoints || 0);
+  const fieldLogBonusPoints = Number(sb.fieldLogBonusPoints || 0);
+  const challengeBonusPoints = Number(sb.challengeBonusPoints || 0);
+
+  const hasBonuses =
+    firstClaimBonusPoints > 0 ||
+    fieldLogBonusPoints > 0 ||
+    challengeBonusPoints > 0;
+
+  let html = "";
+  html += "<div>Claimed (" + escapeHtml_(label) + ")</div>";
+
+  if (!hasBonuses) {
+    html += '<div style="margin-top:12px;">Total points: ' + Number(sb.totalPoints || out.points || 0) + "</div>";
+  } else {
+    html += '<div style="margin-top:12px;">Base points for egg: ' + Number(sb.basePoints || 0) + "</div>";
+
+    if (firstClaimBonusPoints > 0) {
+      html +=
+        '<div style="margin-top:6px;">First claim bonus (' +
+        escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.firstClaim)) +
+        '): +' +
+        firstClaimBonusPoints +
+        "</div>";
+    }
+
+    if (fieldLogBonusPoints > 0) {
+      html +=
+        '<div style="margin-top:6px;">Field Log bonus (' +
+        escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.fieldLog)) +
+        '): +' +
+        fieldLogBonusPoints +
+        "</div>";
+    }
+
+    if (challengeBonusPoints > 0) {
+      const challengeName = String(sb.challengeBonusName || "Challenge");
+      html +=
+        '<div style="margin-top:6px;">' +
+        escapeHtml_(challengeName) +
+        ' bonus (' +
+        escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.challenge)) +
+        '): +' +
+        challengeBonusPoints +
+        "</div>";
+    }
+
+    html +=
+      '<div style="margin-top:14px;font-weight:800;font-size:16px;">TOTAL POINTS: ' +
+      Number(sb.totalPoints || out.points || 0) +
+      "</div>";
+  }
+
+  if (lootMsg) {
+    html += '<div style="margin-top:14px;white-space:pre-wrap;">' + escapeHtml_(lootMsg) + "</div>";
+  }
+
+  return html;
 }
 
 function modalSetVisible_(visible) {
@@ -533,23 +606,8 @@ function equipmentOfferButtons_(offer) {
   if (cmp === "DUPLICATE") {
     return [
       {
-        label: "Convert to " + incomingSellValue + " points",
+        label: "Keep current & sell duplicate (+" + incomingSellValue + " points)",
         value: "KEEP_CURRENT",
-        className: "btn btn--primary"
-      }
-    ];
-  }
-
-  if (cmp === "DOWNGRADE") {
-    return [
-      {
-        label: "Keep Current (+" + incomingSellValue + " points)",
-        value: "KEEP_CURRENT",
-        className: "btn"
-      },
-      {
-        label: "Equip New (+" + equippedSellValue + " points)",
-        value: "EQUIP_NEW",
         className: "btn btn--primary"
       }
     ];
@@ -557,12 +615,12 @@ function equipmentOfferButtons_(offer) {
 
   return [
     {
-      label: "Keep Current (+" + incomingSellValue + " points)",
+      label: "Keep current & sell new (+" + incomingSellValue + " points)",
       value: "KEEP_CURRENT",
       className: "btn"
     },
     {
-      label: "Equip New",
+      label: "Equip new & sell current (+" + equippedSellValue + " points)",
       value: "EQUIP_NEW",
       className: "btn btn--primary"
     }
@@ -578,25 +636,25 @@ function renderEquipmentOfferHtml_(offer) {
   const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
 
   let comparisonText = "Choose which item to keep.";
-  if (cmp === "UPGRADE") comparisonText = "This looks better than your current gear.";
-  if (cmp === "DOWNGRADE") comparisonText = "This is weaker, but you can still swap if you want the points.";
-  if (cmp === "DUPLICATE") comparisonText = "Your current gear is identical.";
+  if (cmp === "UPGRADE") comparisonText = "The new item is better than your current one.";
+  if (cmp === "DOWNGRADE") comparisonText = "The new item is weaker than your current one.";
+  if (cmp === "DUPLICATE") comparisonText = "The new item is identical to your current one.";
 
   let noteHtml = "";
   if (cmp === "DUPLICATE") {
     noteHtml =
-      '<div class="small">Keeping your current ' + escapeHtml_(meta.label) +
-      ' converts the duplicate into <strong>' + incomingSellValue + ' points</strong>.</div>';
-  } else if (cmp === "DOWNGRADE") {
-    noteHtml =
       '<div class="small">' +
-      'Keep Current: <strong>+' + incomingSellValue + ' points</strong><br>' +
-      'Equip New: <strong>+' + equippedSellValue + ' points</strong> from your currently equipped item' +
+        'You already have this item equipped.<br><br>' +
+        'If you keep your current ' + escapeHtml_(meta.label) +
+        ', the duplicate is sold for <strong>' + incomingSellValue + ' points</strong>.' +
       '</div>';
   } else {
     noteHtml =
-      '<div class="small">Keep Current converts the new item into <strong>' +
-      incomingSellValue + ' points</strong>.</div>';
+      '<div class="small">' +
+        '<strong>Keep current:</strong> sell the new item for <strong>' + incomingSellValue + ' points</strong>.' +
+        '<br><br>' +
+        '<strong>Equip new:</strong> sell your current item for <strong>' + equippedSellValue + ' points</strong>.' +
+      '</div>';
   }
 
   return (
@@ -624,7 +682,9 @@ function renderEquipmentOfferHtml_(offer) {
           : ""
       ) +
 
-      noteHtml +
+      '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:rgba(255,255,255,0.03);">' +
+        noteHtml +
+      '</div>' +
     '</div>'
   );
 }
@@ -1199,17 +1259,45 @@ function updateYouOnMap(p) {
 // Eggs
 // -----------------------------
 
-function buildEggPopupHtml_(marker) {
-  const d = lastPos
-    ? Math.round(map.distance(
+function eggDistanceMeters_(marker) {
+  if (lastPos && map) {
+    return Math.round(
+      map.distance(
         [lastPos.lat, lastPos.lng],
         [marker._eggLat, marker._eggLng]
-      ))
-    : Math.round(Number(marker._eggDistanceMeters || 0));
+      )
+    );
+  }
 
-  const claimUi = (teamId && isViewer_())
-    ? '<div class="small"><span class="bad">Primary device required</span></div>'
-    : '<button id="claim_' + marker._eggId + '" class="claim-btn">Claim</button>';
+  return Math.round(Number(marker._eggDistanceMeters || 0));
+}
+
+function currentClaimMeters_() {
+  return positiveNumberOrNull_(lastClaimMeters) ?? DEFAULT_CLAIM_METERS;
+}
+
+function eggIsInClaimRange_(marker) {
+  return eggDistanceMeters_(marker) <= currentClaimMeters_();
+}
+
+function buildEggPopupHtml_(marker) {
+  const d = eggDistanceMeters_(marker);
+  const claimM = currentClaimMeters_();
+  const inRange = eggIsInClaimRange_(marker);
+
+  let claimUi = "";
+
+  if (teamId && isViewer_()) {
+    claimUi = '<div class="small"><span class="bad">Primary device required</span></div>';
+  } else if (inRange) {
+    claimUi = '<button id="claim_' + marker._eggId + '" class="claim-btn">Claim</button>';
+  } else {
+    claimUi =
+      '<div class="small">' +
+        '<span class="muted">Move closer to claim</span><br/>' +
+        'Need &le; ' + claimM + 'm' +
+      '</div>';
+  }
 
   return (
     "<b>" + eggLabel_({ color: marker._eggColor, pattern: marker._eggPattern }) + "</b><br/>" +
@@ -1493,10 +1581,14 @@ async function claimEgg(eggId) {
       }
     }
 
-    await modalAlert_(
-      "Claimed (" + label + ") +" + out.points + " points!" + lootMsg,
-      "Egg Claimed"
-    );
+    await showModal_({
+      title: "Egg Claimed",
+      html: buildClaimScoreHtml_(label, out, lootMsg),
+      buttons: [
+        { label: "OK", value: true, className: "btn btn--primary" }
+      ],
+      dismissValue: true
+    });
 
     if (teamId) {
       const st = await pollTeamState_({
