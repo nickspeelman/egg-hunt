@@ -5,6 +5,8 @@
 // -----------------------------
 const API_URL = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.API_URL) || "";
 const POLL_MS = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.POLL_MS) || 1000;
+const CENTER_LAT = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.CENTER_LAT) || 39.9612;
+const CENTER_LNG = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.CENTER_LNG) || -82.9988;
 // Fallback radii (meters) if backend doesn't return them yet
 const DEFAULT_CLAIM_METERS = 25;
 
@@ -43,6 +45,8 @@ let radarAnimating = false;
 let radarPrevView = null; // { center, zoom }
 let eggMarkers = new Map(); // eggId -> Leaflet marker
 let lastPos = null;
+let startupLoading_ = false;
+const FIRST_SETUP_RELOAD_KEY_ = "eggHunt_firstSetupReloadDone";
 
 // Egg type enums
 const EGG_COLORS = ["RED", "BLUE", "YELLOW"];
@@ -69,6 +73,22 @@ function eggSizeForZoom_(zoom, pattern) {
   return {
     w: Math.max(18, Math.min(90, w)),
     h: Math.max(24, Math.min(115, h))
+  };
+}
+
+function hunterSizeForZoom_(zoom) {
+  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
+
+  // Keep the hunter a little larger than a SOLID egg,
+  // but still clearly in the same visual scale family.
+  const eggSz = eggSizeForZoom_(z, "SOLID");
+
+  const w = Math.round(eggSz.w * 1.15);
+  const h = Math.round(w * 1.15);
+
+  return {
+    w: Math.max(20, Math.min(96, w)),
+    h: Math.max(20, Math.min(96, h))
   };
 }
 
@@ -406,7 +426,7 @@ function setTopStats() {
 }
 
 function renderKitHudPlaceholder_() {
-  const slots = ["binoculars", "boots", "scanner", "antenna", "basket"];
+  const slots = ["binoculars", "boots", "scanner", "antenna", "basket", "powercell"];
   slots.forEach(function(slot) {
     const nameEl = $("kit_" + slot + "_name");
     const bonusEl = $("kit_" + slot + "_bonus");
@@ -455,11 +475,15 @@ function formatKitBonus_(slotOrItem, maybeItem) {
     return mag > 0 ? "+" + Math.round(mag * 100) + "% egg points" : "Base egg points";
   }
 
+  if (slot === "powercell") {
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% radar recharge speed" : "Base radar recharge";
+  }
+
   return "No bonus";
 }
 
 function renderKitFromState_(equipment) {
-  const slots = ["binoculars", "boots", "scanner", "antenna", "basket"];
+  const slots = ["binoculars", "boots", "scanner", "antenna", "basket", "powercell"];
 
   slots.forEach(function(slot) {
     const nameEl = $("kit_" + slot + "_name");
@@ -480,12 +504,13 @@ function renderKitFromState_(equipment) {
 }
 
 function equipmentSlotMeta_(slot) {
-  const map = {
+   const map = {
     binoculars: { label: "Binoculars", icon: "🔭" },
     boots: { label: "Boots", icon: "🥾" },
     scanner: { label: "Scanner", icon: "🎒" },
     antenna: { label: "Antenna", icon: "📡" },
-    basket: { label: "Field Log", icon: "📓" }
+    basket: { label: "Field Log", icon: "📓" },
+    powercell: { label: "Power Cell", icon: "🔋" }
   };
   return map[String(slot || "")] || { label: String(slot || "Equipment"), icon: "🎁" };
 }
@@ -678,10 +703,15 @@ function updateRadarBtnState_() {
   btn.disabled = inCooldown;
   btn.classList.toggle("isCooldown", inCooldown);
 
-  if (inCooldown) {
+  const recharging = remainingMs > 0;
+
+  btn.disabled = recharging;
+  btn.classList.toggle("isCooldown", recharging);
+
+  if (recharging) {
     btn.textContent = `📡 Radar (${remainingS}s)`;
     btn.setAttribute("aria-disabled", "true");
-    btn.title = `Cooling down… ${remainingS}s`;
+    btn.title = `Recharging… ${remainingS}s`;
   } else {
     btn.textContent = "📡 Radar";
     btn.setAttribute("aria-disabled", "false");
@@ -724,7 +754,7 @@ function effectLabel_(k, eff) {
   if (!eff) return k;
   if (k === "revealRadiusBoost") return `Reveal +${Math.round(Number(eff.magnitude||0)*100)}%`;
   if (k === "claimRadiusBoost") return `Claim +${Math.round(Number(eff.magnitude||0)*100)}%`;
-  if (k === "pingCooldownReduction") return `Radar CD -${Math.round(Number(eff.magnitude||0)*100)}%`;
+  if (k === "pingCooldownReduction") return `Radar recharge +${Math.round(Number(eff.magnitude||0)*100)}%`;
   if (k === "pingPulseIncrease") return `+${Math.floor(Number(eff.magnitude||0))} pulse`;
   if (k === "scoreMultiplier") return `x${Number(eff.magnitude||1)}`;
   return k;
@@ -969,6 +999,56 @@ function startGeolocation() {
   );
 }
 
+function waitForInitialGpsFix_(timeoutMs) {
+  timeoutMs = Number(timeoutMs || 20000);
+
+  return new Promise(function(resolve, reject) {
+    if (lastPos) {
+      resolve(lastPos);
+      return;
+    }
+
+    const started = Date.now();
+    const timer = setInterval(function() {
+      if (lastPos) {
+        clearInterval(timer);
+        resolve(lastPos);
+        return;
+      }
+
+      if ((Date.now() - started) >= timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("Timed out waiting for GPS fix."));
+      }
+    }, 200);
+  });
+}
+
+function waitForPlayerMarker_(timeoutMs) {
+  timeoutMs = Number(timeoutMs || 5000);
+
+  return new Promise(function(resolve, reject) {
+    if (youMarker) {
+      resolve(youMarker);
+      return;
+    }
+
+    const started = Date.now();
+    const timer = setInterval(function() {
+      if (youMarker) {
+        clearInterval(timer);
+        resolve(youMarker);
+        return;
+      }
+
+      if ((Date.now() - started) >= timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("Timed out waiting for player marker."));
+      }
+    }, 100);
+  });
+}
+
 function updateRangeRings_(latlng) {
   if (!map) return;
 
@@ -1053,11 +1133,30 @@ function updateRangeRings_(latlng) {
   if (claimCircle) claimCircle.bringToFront();
 }
 
+function playerIcon_(zoom) {
+  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
+  const sz = hunterSizeForZoom_(z);
+  const w = sz.w;
+  const h = sz.h;
+
+  const imgHtml =
+    '<img src="assets/hunter.png" alt="" ' +
+    'style="display:block;width:' + w + 'px;height:' + h + 'px;object-fit:contain;" />';
+
+  return L.divIcon({
+    className: "player-icon",
+    html: imgHtml,
+    iconSize: [w, h],
+    iconAnchor: [Math.round(w / 2), Math.round(h / 2)],
+    popupAnchor: [0, -Math.round(h * 0.45)]
+  });
+}
+
 function updateYouOnMap(p) {
   const latlng = [p.lat, p.lng];
 
   if (!youMarker) {
-    youMarker = L.marker(latlng).addTo(map).bindPopup("You");
+    youMarker = L.marker(latlng, { icon: playerIcon_() }).addTo(map).bindPopup("You");
     map.setView(latlng, 16);
   } else {
     youMarker.setLatLng(latlng);
@@ -1086,12 +1185,14 @@ function updateYouOnMap(p) {
   // Refresh popup distances for already-revealed eggs
   refreshEggMarkerDistances_();
 
-  setStatus(
-    '<span class="ok">GPS OK</span> - ' +
-    'lat <span class="mono">' + p.lat.toFixed(5) + '</span>, ' +
-    'lng <span class="mono">' + p.lng.toFixed(5) + '</span> - ' +
-    '+/-' + Math.round(p.accuracy) + 'm'
-  );
+  if (!startupLoading_) {
+    setStatus(
+      '<span class="ok">GPS OK</span> - ' +
+      'lat <span class="mono">' + p.lat.toFixed(5) + '</span>, ' +
+      'lng <span class="mono">' + p.lng.toFixed(5) + '</span> - ' +
+      '+/-' + Math.round(p.accuracy) + 'm'
+    );
+  }
 }
 
 // -----------------------------
@@ -1122,7 +1223,31 @@ function refreshEggMarkerDistances_() {
 
   eggMarkers.forEach(function(m) {
     m.setPopupContent(buildEggPopupHtml_(m));
+
+    if (m.isPopupOpen && m.isPopupOpen()) {
+      bindClaimButton_(m);
+      applyPopupScale_();
+    }
   });
+}
+
+function bindClaimButton_(marker) {
+  if (!marker || (teamId && isViewer_())) return;
+
+  const btn = document.getElementById("claim_" + marker._eggId);
+  if (!btn) return;
+
+  btn.onclick = async function() {
+    await runWithLoading_(
+      {
+        button: btn,
+        delayMs: 150
+      },
+      async function() {
+        await claimEgg(marker._eggId);
+      }
+    );
+  };
 }
 
 
@@ -1153,22 +1278,7 @@ function upsertEggMarker(egg) {
   m.on("popupopen", function() {
     m.setPopupContent(buildEggPopupHtml_(m));
     applyPopupScale_();
-
-    const btn = document.getElementById("claim_" + m._eggId);
-
-    if (btn && !(teamId && isViewer_())) {
-      btn.onclick = async function() {
-        await runWithLoading_(
-          {
-            button: btn,
-            delayMs: 150
-          },
-          async function() {
-            await claimEgg(m._eggId);
-          }
-        );
-      };
-    }
+    bindClaimButton_(m);
   });
 
   eggMarkers.set(egg.eggId, m);
@@ -1434,12 +1544,13 @@ function applyPopupScale_() {
 // -----------------------------
 function initMap() {
   map = L.map("map", {
+    center: [CENTER_LAT, CENTER_LNG],
+    zoom: 13,
     zoomControl: true,
     maxZoom: 21,
     zoomSnap: 0.5,
     zoomDelta: 0.5
   });
-
   // Rings pane (claim/reveal circles) — above normal overlays, below markers
   map.createPane("ringsPane");
   // overlayPane ~400, markerPane ~600
@@ -1453,9 +1564,124 @@ function initMap() {
   map.on("zoomend", function() {
     applyPopupScale_();
     const z = map.getZoom();
+
     eggMarkers.forEach(function(m) {
       m.setIcon(eggIcon_(m._eggColor, m._eggPattern, z));
     });
+
+    if (youMarker) {
+      youMarker.setIcon(playerIcon_(z));
+    }
+  });
+}
+
+function refreshMapLayout_() {
+  if (!map) return;
+  setTimeout(function() {
+    if (map) map.invalidateSize();
+  }, 0);
+}
+
+function setStartupMessage_(msg) {
+  setStatus('<span class="mono">' + msg + '</span>');
+  if (startupLoading_) {
+    showLoading_(msg);
+  }
+}
+
+function afterSetupUiSettles_() {
+  return new Promise(function(resolve) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        setTimeout(resolve, 0);
+      });
+    });
+  });
+}
+
+function waitForNextPaint_() {
+  return new Promise(function(resolve) {
+    requestAnimationFrame(function() {
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
+function waitForPlayerMarkerRendered_(timeoutMs) {
+  timeoutMs = Number(timeoutMs || 5000);
+
+  return new Promise(function(resolve, reject) {
+    const started = Date.now();
+
+    const timer = setInterval(function() {
+      const rendered =
+        !!youMarker &&
+        !!youMarker._map &&
+        !!youMarker._icon;
+
+      if (rendered) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+
+      if ((Date.now() - started) >= timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("Timed out waiting for player marker to render."));
+      }
+    }, 100);
+  });
+}
+
+function waitForMapSettled_(timeoutMs) {
+  timeoutMs = Number(timeoutMs || 1500);
+
+  return new Promise(function(resolve) {
+    if (!map) {
+      resolve();
+      return;
+    }
+
+    let done = false;
+
+    function finish() {
+      if (done) return;
+      done = true;
+      map.off("moveend", finish);
+      map.off("zoomend", finish);
+      resolve();
+    }
+
+    map.once("moveend", finish);
+    map.once("zoomend", finish);
+
+    setTimeout(finish, timeoutMs);
+  });
+}
+
+function waitForMapMoveEnd_(timeoutMs) {
+  timeoutMs = Number(timeoutMs || 1500);
+
+  return new Promise(function(resolve) {
+    if (!map) {
+      resolve();
+      return;
+    }
+
+    let done = false;
+
+    function finish() {
+      if (done) return;
+      done = true;
+      map.off("moveend", finish);
+      map.off("zoomend", finish);
+      resolve();
+    }
+
+    map.once("moveend", finish);
+    map.once("zoomend", finish);
+
+    setTimeout(finish, timeoutMs);
   });
 }
 
@@ -1472,6 +1698,7 @@ function wireResetButton_() {
     localStorage.removeItem("eggHunt_teamId");
     localStorage.removeItem("eggHunt_teamRole");
     localStorage.removeItem("eggHunt_teamName");
+    sessionStorage.removeItem(FIRST_SETUP_RELOAD_KEY_);
     location.reload();
   };
 }
@@ -1866,7 +2093,7 @@ async function playRadar_(payload) {
 }
 
 async function boot() {
-  setStatus('<span class="mono">JS loaded...</span>');
+  setStatus('<span class="mono">Initializing...</span>');
 
   wireResetButton_();
   if (!$("appModal")) {
@@ -1874,46 +2101,108 @@ async function boot() {
     return;
   }
   wireFilters_();
-  
 
   if (typeof L === "undefined") {
     setStatus('<span class="bad">Leaflet failed to load.</span> Check network/integrity/CSP.');
     return;
   }
 
-  initMap();
-  applyPopupScale_();
   setTopStats();
   renderKitHudPlaceholder_();
 
-  setStatus('<span class="mono">Map initialized... waiting for player + GPS</span>');
+  const hadPlayerBeforeBoot = !!playerId;
+  const hadTeamBeforeBoot = !!teamId || !!teamRole;
 
+  setStatus('<span class="mono">Setting up player...</span>');
   await ensurePlayer();
-  await ensureTeam_();
-  wireRadarButton_();
-  wireLootUseBtn_();
-  
-    // Bootstrap team state once (restores radar cooldown immediately after refresh)
-  if (teamId) await pollTeamState_();
 
-  if (!isViewer_()) {
-    startGeolocation(); // solo OR PRIMARY
-  } else {
-    setStatus('<span class="ok">Viewer mode</span> - mirroring team location...');
-    await pollTeamState_();
+  setStatus('<span class="mono">Setting up team...</span>');
+  await ensureTeam_();
+  const gainedPlayerDuringSetup = !hadPlayerBeforeBoot && !!playerId;
+  const gainedTeamDuringSetup = !hadTeamBeforeBoot && (!!teamId || !!teamRole);
+  const needsPostSetupReload = gainedPlayerDuringSetup || gainedTeamDuringSetup;
+
+  if (needsPostSetupReload && !sessionStorage.getItem(FIRST_SETUP_RELOAD_KEY_)) {
+    sessionStorage.setItem(FIRST_SETUP_RELOAD_KEY_, "1");
+    setStatus('<span class="mono">Setup complete. Reloading app...</span>');
+    location.reload();
+    return;
   }
 
-   setInterval(function() {
-    if (teamId && !pauseTeamStatePolling_) {
-      pollTeamState_().catch(function() {});
+  startupLoading_ = true;
+  setStartupMessage_("Loading map...");
+
+  initMap();
+  applyPopupScale_();
+  refreshMapLayout_();
+
+  wireRadarButton_();
+  wireLootUseBtn_();
+   try {
+    if (!isViewer_()) {
+      setStartupMessage_("Starting GPS...");
+      startGeolocation();
     }
 
-    pollNearbyEggs().catch(function(err) {
-      setStatus('<span class="bad">Error:</span> ' + String(err && (err.message || err)));
-    });
-  }, POLL_MS);
+    if (teamId) {
+      setStartupMessage_("Loading equipment and team state...");
+      await pollTeamState_();
+    }
 
-  setStatus('<span class="ok">Running</span> - waiting for GPS fix...');
+      if (!isViewer_()) {
+      setStartupMessage_("Waiting for GPS fix...");
+      await waitForInitialGpsFix_(20000);
+
+      // Force the player marker/rings onto the map before eggs render
+      if (lastPos) {
+        updateYouOnMap(lastPos);
+        refreshMapLayout_();
+
+        // On a fresh player, the first setView/zoom is still settling here.
+        // Wait for Leaflet to finish that move before adding eggs.
+        await waitForMapSettled_(1500);
+      }
+
+      // Then give the browser one paint to show the settled player marker
+      await waitForNextPaint_();
+
+      setStartupMessage_("Revealing nearby eggs...");
+      await pollNearbyEggs();
+      setStartupMessage_("Placing your marker...");
+      await waitForPlayerMarkerRendered_(5000);
+      await waitForNextPaint_();
+    }
+
+    setInterval(function() {
+      if (teamId && !pauseTeamStatePolling_) {
+        pollTeamState_().catch(function() {});
+      }
+
+      pollNearbyEggs().catch(function(err) {
+        setStatus('<span class="bad">Error:</span> ' + String(err && (err.message || err)));
+      });
+    }, POLL_MS);
+
+    startupLoading_ = false;
+    hideLoading_();
+
+    if (isViewer_()) {
+      setStatus('<span class="ok">Viewer mode</span> - mirroring team location...');
+    } else if (lastPos) {
+      setStatus(
+        '<span class="ok">GPS OK</span> - ' +
+        'lat <span class="mono">' + lastPos.lat.toFixed(5) + '</span>, ' +
+        'lng <span class="mono">' + lastPos.lng.toFixed(5) + '</span> - ' +
+        '+/-' + Math.round(lastPos.accuracy || 0) + 'm'
+      );
+    } else {
+      setStatus('<span class="ok">Running</span>');
+    }
+  } catch (err) {
+    startupLoading_ = false;
+    hideLoading_();
+    throw err;
+  }
 }
 
 window.addEventListener("load", function() {

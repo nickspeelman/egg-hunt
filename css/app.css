@@ -503,7 +503,7 @@ button.is-busy,
 
 .kitGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -648,6 +648,12 @@ button.is-busy,
   }
 }
 
+@media (min-width: 1100px) {
+  .kitGrid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
 /* =========================
    Egg Hunter Kit refresh
    ========================= */
@@ -672,7 +678,7 @@ button.is-busy,
 
 .kitGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
