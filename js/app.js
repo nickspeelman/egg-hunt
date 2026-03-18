@@ -94,7 +94,7 @@ function hunterSizeForZoom_(zoom) {
 
 function eggLabel_(egg) {
   const c = properCase_(egg.color || "RED");
-  const p = properCase_(egg.pattern || "SOLID");
+  const p = patternDisplayName_(egg.pattern || "SOLID");
   return c + " " + p;
 }
 
@@ -125,14 +125,11 @@ function eggIcon_(color, pattern, zoom) {
       '<g clip-path="url(#' + clipId + ')" opacity="0.95">' +
         '<rect x="0" y="0" width="28" height="36" fill="url(#' + stripesId + ')"/>' +
       "</g>";
-  } else if (pat === "CROWN") {
+   } else if (pat === "CROWN") {
     overlay =
       '<g clip-path="url(#' + clipId + ')" opacity="0.95">' +
-        '<path d="M9 10 L11.5 13 L14 9.5 L16.5 13 L19 10 L18.2 15 H9.8 Z" ' +
-          'fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.18)" stroke-width="0.4" />' +
-        '<circle cx="11.5" cy="13" r="0.8" fill="rgba(0,0,0,0.18)"/>' +
-        '<circle cx="14" cy="9.5" r="0.8" fill="rgba(0,0,0,0.18)"/>' +
-        '<circle cx="16.5" cy="13" r="0.8" fill="rgba(0,0,0,0.18)"/>' +
+        '<path d="M8.5 18.5 L11 14.5 L13.5 18.5 L16 14.5 L18.5 18.5 L21 14.5" ' +
+          'fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />' +
       "</g>";
   }
 
@@ -262,6 +259,16 @@ function escapeHtml_(s) {
 function properCase_(s) {
   s = String(s || "").toLowerCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function patternDisplayName_(pattern) {
+  switch (String(pattern || "").toUpperCase()) {
+    case "SOLID": return "Base";
+    case "DOT": return "Node";
+    case "STRIPE": return "Band";
+    case "CROWN": return "Waveform";
+    default: return properCase_(pattern || "");
+  }
 }
 
 function formatBonusPercent_(multiplier) {
