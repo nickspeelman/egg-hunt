@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Operation: Egg</title>
+    <title>Operation E.G.G.</title>
 
     <!-- Leaflet (no API key required) -->
     <link
@@ -22,7 +22,7 @@
     <div class="wrap">
       <h1 class="title">
         <img src="assets/logo.png" class="titleIcon">
-        Operation: Egg
+        Operation E.G.G.
       </h1>
 
       <div class="mapWrap">
@@ -36,12 +36,12 @@
 
       <div class="panel">
         <div class="row">
-          <div class="pill">Player: <strong id="playerName">—</strong></div>
-          <div class="pill">Score: <strong id="score">0</strong></div>
-          <div class="pill">Revealed: <strong id="revealedCount">0</strong></div>
+          <div class="pill">Operator: <strong id="playerName">—</strong></div>
+          <div class="pill">Data Points: <strong id="score">0</strong></div>
+          <div class="pill">Detected: <strong id="revealedCount">0</strong></div>
 
-          <button class="btn btn--radar" id="radarBtn" title="Radar sweep (PRIMARY only)">
-            📡 Radar
+          <button class="btn btn--radar" id="radarBtn" title="Resonance sweep (PRIMARY only)">
+            📡 Cadburrion Sweep
           </button>
 
           <button
@@ -49,57 +49,57 @@
             id="resetPlayerBtn"
             title="Clear local player and re-register"
           >
-            Reset player
+            Reset Operator ID
           </button>
         </div>
 
              <div class="kitPanel" id="kitPanel" aria-label="Egg Hunter Kit">
           <div class="kitPanel__header">
-            <div class="pill">Egg Hunter Kit</div>
+            <div class="pill">Field Research Kit</div>
           </div>
 
           <div class="kitGrid">
             <div class="kitSlot" data-slot="binoculars">
               <div class="kitSlot__iconWrap" aria-hidden="true">
-                <img class="kitSlot__iconImg" src="./assets/binoculars.png" alt="" />
+                <img class="kitSlot__iconImg" src="./assets/optical-array.png" alt="" />
               </div>
-              <div class="kitSlot__label">Binoculars</div>
+              <div class="kitSlot__label">Optical Array</div>
               <div class="kitSlot__item" id="kit_binoculars_name">—</div>
               <div class="kitSlot__bonus" id="kit_binoculars_bonus">No bonus</div>
             </div>
 
             <div class="kitSlot" data-slot="boots">
               <div class="kitSlot__iconWrap" aria-hidden="true">
-                <img class="kitSlot__iconImg" src="./assets/boots.png" alt="" />
+                <img class="kitSlot__iconImg" src="./assets/signal-booster.png" alt="" />
               </div>
-              <div class="kitSlot__label">Boots</div>
+              <div class="kitSlot__label">Signal Booster</div>
               <div class="kitSlot__item" id="kit_boots_name">—</div>
               <div class="kitSlot__bonus" id="kit_boots_bonus">No bonus</div>
             </div>
 
             <div class="kitSlot" data-slot="scanner">
               <div class="kitSlot__iconWrap" aria-hidden="true">
-                <img class="kitSlot__iconImg" src="./assets/scanner.png" alt="" />
+                <img class="kitSlot__iconImg" src="./assets/mobile-radar.png" alt="" />
               </div>
-              <div class="kitSlot__label">Scanner</div>
+              <div class="kitSlot__label">Mobile Radar</div>
               <div class="kitSlot__item" id="kit_scanner_name">—</div>
               <div class="kitSlot__bonus" id="kit_scanner_bonus">No bonus</div>
             </div>
 
-            <div class="kitSlot" data-slot="antenna">
-              <div class="kitSlot__iconWrap" aria-hidden="true">
-                <img class="kitSlot__iconImg" src="./assets/antenna.png" alt="" />
-              </div>
-              <div class="kitSlot__label">Antenna</div>
-              <div class="kitSlot__item" id="kit_antenna_name">—</div>
-              <div class="kitSlot__bonus" id="kit_antenna_bonus">No bonus</div>
+           <div class="kitSlot" data-slot="antenna">
+            <div class="kitSlot__iconWrap" aria-hidden="true">
+              <img class="kitSlot__iconImg" src="./assets/antenna.png" alt="" />
             </div>
+            <div class="kitSlot__label">Resonance Dish</div>
+            <div class="kitSlot__item" id="kit_antenna_name">—</div>
+            <div class="kitSlot__bonus" id="kit_antenna_bonus">No bonus</div>
+          </div>
 
             <div class="kitSlot" data-slot="basket">
               <div class="kitSlot__iconWrap" aria-hidden="true">
-                <img class="kitSlot__iconImg" src="./assets/journal.png" alt="" />
+                <img class="kitSlot__iconImg" src="./assets/scanner.png" alt="" />
               </div>
-              <div class="kitSlot__label">Field Log</div>
+              <div class="kitSlot__label">Scanner</div>
               <div class="kitSlot__item" id="kit_basket_name">—</div>
               <div class="kitSlot__bonus" id="kit_basket_bonus">No bonus</div>
             </div>
@@ -146,7 +146,7 @@
 
         <div class="small">
           <div class="small">
-            Tip: Eggs appear when they first enter your reveal range. Tap an egg marker to claim.
+            Tip: Eggs resolve when they enter your detection range. Move closer to stabilize and scan.
           </div>
         </div>
       </div>

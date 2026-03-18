@@ -273,7 +273,7 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
 
   if (!sb) {
     return escapeHtml_(
-      "Claimed (" + label + ")\n\nTotal points: " + Number(out && out.points || 0)
+      "Scanned (" + label + ")\n\nTotal data points: " + Number(out && out.points || 0)
     ).replace(/\n/g, "<br>");
   }
 
@@ -287,16 +287,16 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
     challengeBonusPoints > 0;
 
   let html = "";
-  html += "<div>Claimed (" + escapeHtml_(label) + ")</div>";
+  html += "<div>Scanned (" + escapeHtml_(label) + ")</div>";
 
   if (!hasBonuses) {
-    html += '<div style="margin-top:12px;">Total points: ' + Number(sb.totalPoints || out.points || 0) + "</div>";
+    html += '<div style="margin-top:12px;">Total data points: ' + Number(sb.totalPoints || out.points || 0) + "</div>";
   } else {
-    html += '<div style="margin-top:12px;">Base points for egg: ' + Number(sb.basePoints || 0) + "</div>";
+    html += '<div style="margin-top:12px;">Base data points for egg: ' + Number(sb.basePoints || 0) + "</div>";
 
     if (firstClaimBonusPoints > 0) {
       html +=
-        '<div style="margin-top:6px;">First claim bonus (' +
+        '<div style="margin-top:6px;">First scan yield (' +
         escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.firstClaim)) +
         '): +' +
         firstClaimBonusPoints +
@@ -305,7 +305,7 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
 
     if (fieldLogBonusPoints > 0) {
       html +=
-        '<div style="margin-top:6px;">Field Log bonus (' +
+        '<div style="margin-top:6px;">Scanner yield (' +
         escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.fieldLog)) +
         '): +' +
         fieldLogBonusPoints +
@@ -313,11 +313,11 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
     }
 
     if (challengeBonusPoints > 0) {
-      const challengeName = String(sb.challengeBonusName || "Challenge");
+      const challengeName = String(sb.challengeBonusName || "Cadburrion Bloom Yield");
       html +=
         '<div style="margin-top:6px;">' +
         escapeHtml_(challengeName) +
-        ' bonus (' +
+        ' yield (' +
         escapeHtml_(formatBonusPercent_(sb.multipliers && sb.multipliers.challenge)) +
         '): +' +
         challengeBonusPoints +
@@ -325,7 +325,7 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
     }
 
     html +=
-      '<div style="margin-top:14px;font-weight:800;font-size:16px;">TOTAL POINTS: ' +
+      '<div style="margin-top:14px;font-weight:800;font-size:16px;">TOTAL DATA POINTS: ' +
       Number(sb.totalPoints || out.points || 0) +
       "</div>";
   }
@@ -504,7 +504,7 @@ function renderKitHudPlaceholder_() {
     const nameEl = $("kit_" + slot + "_name");
     const bonusEl = $("kit_" + slot + "_bonus");
     if (nameEl) nameEl.textContent = "Loading…";
-    if (bonusEl) bonusEl.textContent = "Loading bonus…";
+    if (bonusEl) bonusEl.textContent = "Loading yield…";
   });
 }
 
@@ -522,20 +522,20 @@ function formatKitBonus_(slotOrItem, maybeItem) {
     slot = String((item && item.slot) || "");
   }
 
-  if (!item) return "No bonus";
+  if (!item) return "No additional yield";
 
   const mag = Number(item.magnitude || 0);
 
   if (slot === "binoculars") {
-    return mag > 0 ? "+" + Math.round(mag * 100) + "% reveal radius" : "Base reveal radius";
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% detect radius" : "Base detect radius";
   }
 
   if (slot === "boots") {
-    return mag > 0 ? "+" + Math.round(mag * 100) + "% claim radius" : "Base claim radius";
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% scan radius" : "Base scan radius";
   }
 
   if (slot === "scanner") {
-    return mag > 0 ? "+" + Math.round(mag * 100) + "% radar range" : "Base radar range";
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% sweep range" : "Base sweep range";
   }
 
   if (slot === "antenna") {
@@ -545,14 +545,14 @@ function formatKitBonus_(slotOrItem, maybeItem) {
   }
 
   if (slot === "basket") {
-    return mag > 0 ? "+" + Math.round(mag * 100) + "% egg points" : "Base egg points";
+    return mag > 0 ? "+" + Math.round(mag * 100) + "% scan data points" : "Base scan yield";
   }
 
   if (slot === "powercell") {
     return mag > 0 ? "+" + Math.round(mag * 100) + "% radar recharge speed" : "Base radar recharge";
   }
 
-  return "No bonus";
+  return "No increase";
 }
 
 function renderKitFromState_(equipment) {
@@ -577,14 +577,14 @@ function renderKitFromState_(equipment) {
 }
 
 function equipmentSlotMeta_(slot) {
-   const map = {
-    binoculars: { label: "Binoculars", icon: "🔭" },
-    boots: { label: "Boots", icon: "🥾" },
-    scanner: { label: "Scanner", icon: "🎒" },
-    antenna: { label: "Antenna", icon: "📡" },
-    basket: { label: "Field Log", icon: "📓" },
-    powercell: { label: "Power Cell", icon: "🔋" }
-  };
+    const map = {
+      binoculars: { label: "Optical Array", icon: "🔭" },
+      boots: { label: "Signal Booster", icon: "📶" },
+      scanner: { label: "Mobile Radar", icon: "📡" },
+      antenna: { label: "Resonance Dish", icon: "📡" },
+      basket: { label: "Scanner", icon: "🖲️" },
+      powercell: { label: "Power Cell", icon: "🔋" }
+    };
   return map[String(slot || "")] || { label: String(slot || "Equipment"), icon: "🎁" };
 }
 
@@ -606,7 +606,7 @@ function equipmentOfferButtons_(offer) {
   if (cmp === "DUPLICATE") {
     return [
       {
-        label: "Keep current & sell duplicate (+" + incomingSellValue + " points)",
+        label: "Keep current & return duplicate (+" + incomingSellValue + "  data points)",
         value: "KEEP_CURRENT",
         className: "btn btn--primary"
       }
@@ -615,12 +615,12 @@ function equipmentOfferButtons_(offer) {
 
   return [
     {
-      label: "Keep current & sell new (+" + incomingSellValue + " points)",
+      label: "Keep current & return new (+" + incomingSellValue + "data points)",
       value: "KEEP_CURRENT",
       className: "btn"
     },
     {
-      label: "Equip new & sell current (+" + equippedSellValue + " points)",
+      label: "Equip new & return current (+" + equippedSellValue + "data points)",
       value: "EQUIP_NEW",
       className: "btn btn--primary"
     }
@@ -646,14 +646,14 @@ function renderEquipmentOfferHtml_(offer) {
       '<div class="small">' +
         'You already have this item equipped.<br><br>' +
         'If you keep your current ' + escapeHtml_(meta.label) +
-        ', the duplicate is sold for <strong>' + incomingSellValue + ' points</strong>.' +
+        ', the duplicate is returned for <strong>' + incomingSellValue + 'data points</strong>.' +
       '</div>';
   } else {
     noteHtml =
       '<div class="small">' +
-        '<strong>Keep current:</strong> sell the new item for <strong>' + incomingSellValue + ' points</strong>.' +
+        '<strong>Keep current:</strong> return the new item for <strong>' + incomingSellValue + 'data points</strong>.' +
         '<br><br>' +
-        '<strong>Equip new:</strong> sell your current item for <strong>' + equippedSellValue + ' points</strong>.' +
+        '<strong>Equip new:</strong> return your current item for <strong>' + equippedSellValue + 'data points</strong>.' +
       '</div>';
   }
 
@@ -812,8 +812,8 @@ function fmtMs_(ms) {
 
 function effectLabel_(k, eff) {
   if (!eff) return k;
-  if (k === "revealRadiusBoost") return `Reveal +${Math.round(Number(eff.magnitude||0)*100)}%`;
-  if (k === "claimRadiusBoost") return `Claim +${Math.round(Number(eff.magnitude||0)*100)}%`;
+  if (k === "revealRadiusBoost") return `Detect +${Math.round(Number(eff.magnitude||0)*100)}%`;
+  if (k === "claimRadiusBoost") return `Scan +${Math.round(Number(eff.magnitude||0)*100)}%`;
   if (k === "pingCooldownReduction") return `Radar recharge +${Math.round(Number(eff.magnitude||0)*100)}%`;
   if (k === "pingPulseIncrease") return `+${Math.floor(Number(eff.magnitude||0))} pulse`;
   if (k === "scoreMultiplier") return `x${Number(eff.magnitude||1)}`;
@@ -1290,11 +1290,11 @@ function buildEggPopupHtml_(marker) {
   if (teamId && isViewer_()) {
     claimUi = '<div class="small"><span class="bad">Primary device required</span></div>';
   } else if (inRange) {
-    claimUi = '<button id="claim_' + marker._eggId + '" class="claim-btn">Claim</button>';
+    claimUi = '<button id="claim_' + marker._eggId + '" class="claim-btn">Scan</button>';
   } else {
     claimUi =
       '<div class="small">' +
-        '<span class="muted">Move closer to claim</span><br/>' +
+        '<span class="muted">Move closer to scan</span><br/>' +
         'Need &le; ' + claimM + 'm' +
       '</div>';
   }
@@ -1384,7 +1384,7 @@ async function pollTeamState_(options) {
   if (!teamId) return null;
   const out = await api("teamState", { playerId: playerId, teamId: teamId });
   if (!out.ok) {
-    setStatus('<span class="bad">API error:</span> ' + (out.error || "teamState failed"));
+    setStatus('<span class="bad">Field Link Unstable:</span> ' + (out.error || "teamState failed"));
     return null;
   }
   const st = out.state || {};
@@ -1454,7 +1454,7 @@ async function pollNearbyEggs() {
   });
 
   if (!out.ok) {
-    setStatus('<span class="bad">API error:</span> ' + (out.error || "unknown"));
+    setStatus('<span class="bad">Field Link Unstable:</span> ' + (out.error || "unknown"));
     return;
   }
 
@@ -1493,7 +1493,7 @@ async function claimEgg(eggId) {
   if (!lastPos || !playerId) return;
 
   if (teamId && !isPrimary_()) {
-    await modalAlert_("Primary device required.", "Claim Egg");
+    await modalAlert_("Primary device required.", "Scan Egg");
     return;
   }
 
@@ -1524,17 +1524,17 @@ async function claimEgg(eggId) {
             "m away (need <= " +
             out.claimMeters +
             "m).",
-          "Claim Egg"
+          "Scan Egg"
         );
         return;
       }
-      await modalAlert_((out && out.error) || "Claim failed.", "Claim Egg");
+      await modalAlert_((out && out.error) || "Scan failed.", "Scan Egg");
       return;
     }
 
     // Server says it's already claimed
     if (out.alreadyClaimed) {
-      await modalAlert_("You already claimed this egg.", "Claim Egg");
+      await modalAlert_("You already scanned this egg.", "Scan Egg");
       return;
     }
 
@@ -1582,7 +1582,7 @@ async function claimEgg(eggId) {
     }
 
     await showModal_({
-      title: "Egg Claimed",
+      title: "Egg Scanned",
       html: buildClaimScoreHtml_(label, out, lootMsg),
       buttons: [
         { label: "OK", value: true, className: "btn btn--primary" }
@@ -2185,7 +2185,7 @@ async function playRadar_(payload) {
 }
 
 async function boot() {
-  setStatus('<span class="mono">Initializing...</span>');
+  setStatus('<span class="mono">Linking to ERSD Systems...</span>');
 
   wireResetButton_();
   if (!$("appModal")) {
@@ -2258,7 +2258,7 @@ async function boot() {
       // Then give the browser one paint to show the settled player marker
       await waitForNextPaint_();
 
-      setStartupMessage_("Revealing nearby eggs...");
+      setStartupMessage_("Detecting nearby eggs...");
       await pollNearbyEggs();
       setStartupMessage_("Placing your marker...");
       await waitForPlayerMarkerRendered_(5000);
