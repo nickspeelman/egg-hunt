@@ -600,9 +600,9 @@ function equipmentOfferTitle_(offer) {
   const cmp = String((offer && offer.comparison) || "").toUpperCase();
 
   if (cmp === "DUPLICATE") {
-    return meta.icon + " Duplicate " + meta.label + " Found";
+    return meta.icon + " Duplicate " + meta.label + " Deployed";
   }
-  return meta.icon + " New " + meta.label + " Found";
+  return meta.icon + " New " + meta.label + " Deployed";
 }
 
 function equipmentOfferButtons_(offer) {
@@ -622,12 +622,12 @@ function equipmentOfferButtons_(offer) {
 
   return [
     {
-      label: "Keep current & return new (+" + incomingSellValue + "data points)",
+      label: "Keep current & return new (+" + incomingSellValue + " data points)",
       value: "KEEP_CURRENT",
       className: "btn"
     },
     {
-      label: "Equip new & return current (+" + equippedSellValue + "data points)",
+      label: "Equip new & return current (+" + equippedSellValue + " data points)",
       value: "EQUIP_NEW",
       className: "btn btn--primary"
     }
@@ -653,14 +653,14 @@ function renderEquipmentOfferHtml_(offer) {
       '<div class="small">' +
         'You already have this item equipped.<br><br>' +
         'If you keep your current ' + escapeHtml_(meta.label) +
-        ', the duplicate is returned for <strong>' + incomingSellValue + 'data points</strong>.' +
+        ', the duplicate is returned for <strong>' + incomingSellValue + ' data points</strong>.' +
       '</div>';
   } else {
     noteHtml =
       '<div class="small">' +
-        '<strong>Keep current:</strong> return the new item for <strong>' + incomingSellValue + 'data points</strong>.' +
+        '<strong>Keep current:</strong> return the new item for <strong>' + incomingSellValue + ' data points</strong>.' +
         '<br><br>' +
-        '<strong>Equip new:</strong> return your current item for <strong>' + equippedSellValue + 'data points</strong>.' +
+        '<strong>Equip new:</strong> return your current item for <strong>' + equippedSellValue + ' data points</strong>.' +
       '</div>';
   }
 
@@ -1582,9 +1582,9 @@ async function claimEgg(eggId) {
         }
       } else if (out.loot.kind === "OFFER" && out.loot.item) {
         const item = out.loot.item;
-        lootMsg = "\nLoot found: " + (item.name || item.lootId || "Loot");
+        lootMsg = "\nEquipment Deployment: " + (item.name || item.lootId || "Loot");
       } else {
-        lootMsg = "\nLoot drop!";
+        lootMsg = "\nEquipment Deployment!";
       }
     }
 
