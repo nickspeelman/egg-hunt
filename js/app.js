@@ -47,6 +47,10 @@ let eggMarkers = new Map(); // eggId -> Leaflet marker
 let lastPos = null;
 let startupLoading_ = false;
 const FIRST_SETUP_RELOAD_KEY_ = "eggHunt_firstSetupReloadDone";
+let gameStartMs = null;
+let gameEndMs = null;
+let serverClockOffsetMs = 0;
+let gameClockIntervalId = null;
 
 // Egg type enums
 const EGG_COLORS = ["RED", "BLUE", "YELLOW"];
@@ -505,6 +509,80 @@ function setTopStats() {
   $("revealedCount").textContent = String(eggMarkers.size);
 }
 
+function formatGameTimeRemaining(ms) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return (
+      "T-" +
+      String(hours) + ":" +
+      String(minutes).padStart(2, "0") + ":" +
+      String(seconds).padStart(2, "0")
+    );
+  }
+
+  return (
+    "T-" +
+    String(minutes) + ":" +
+    String(seconds).padStart(2, "0")
+  );
+}
+
+function currentServerNowMs_() {
+  return Date.now() + serverClockOffsetMs;
+}
+
+function renderGameClock_() {
+  const el = $("gameClock");
+  if (!el) return;
+
+  if (!Number.isFinite(gameStartMs) || !Number.isFinite(gameEndMs)) {
+    el.textContent = "Awaiting start";
+    return;
+  }
+
+  const nowMs = currentServerNowMs_();
+
+  if (nowMs < gameStartMs) {
+    el.textContent = "Awaiting start";
+    return;
+  }
+
+  if (nowMs >= gameEndMs) {
+    el.textContent = "Game Over";
+    return;
+  }
+
+  el.textContent = formatGameTimeRemaining(gameEndMs - nowMs);
+}
+
+function applyGameTiming_(payload) {
+  if (!payload || !payload.serverNowTs) return;
+
+  const serverNowMs = Date.parse(payload.serverNowTs);
+  if (Number.isFinite(serverNowMs)) {
+    serverClockOffsetMs = serverNowMs - Date.now();
+  }
+
+  const nextStartMs = Date.parse(payload.gameStartTs || "");
+  const nextEndMs = Date.parse(payload.gameEndTs || "");
+
+  gameStartMs = Number.isFinite(nextStartMs) ? nextStartMs : null;
+  gameEndMs = Number.isFinite(nextEndMs) ? nextEndMs : null;
+
+  renderGameClock_();
+}
+
+function startGameClockTicker_() {
+  if (gameClockIntervalId) return;
+  gameClockIntervalId = setInterval(function() {
+    renderGameClock_();
+  }, 1000);
+}
+
 function renderKitHudPlaceholder_() {
   const slots = ["binoculars", "boots", "scanner", "antenna", "basket", "powercell"];
   slots.forEach(function(slot) {
@@ -607,13 +685,41 @@ function equipmentOfferTitle_(offer) {
 
 function equipmentOfferButtons_(offer) {
   const cmp = String((offer && offer.comparison) || "").toUpperCase();
-  const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
-  const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
 
   if (cmp === "DUPLICATE") {
     return [
       {
-        label: "Keep current & return duplicate (+" + incomingSellValue + "  data points)",
+        label: "Keep Current",
+        value: "KEEP_CURRENT",
+        className: "btn btn--primary"
+      }
+    ];
+  }
+
+  if (cmp === "UPGRADE") {
+    return [
+      {
+        label: "Upgrade",
+        value: "EQUIP_NEW",
+        className: "btn btn--primary"
+      },
+      {
+        label: "Keep Current",
+        value: "KEEP_CURRENT",
+        className: "btn"
+      }
+    ];
+  }
+
+  if (cmp === "DOWNGRADE") {
+    return [
+      {
+        label: "Downgrade",
+        value: "EQUIP_NEW",
+        className: "btn"
+      },
+      {
+        label: "Keep Current",
         value: "KEEP_CURRENT",
         className: "btn btn--primary"
       }
@@ -622,14 +728,14 @@ function equipmentOfferButtons_(offer) {
 
   return [
     {
-      label: "Keep current & return new (+" + incomingSellValue + " data points)",
-      value: "KEEP_CURRENT",
-      className: "btn"
-    },
-    {
-      label: "Equip new & return current (+" + equippedSellValue + " data points)",
+      label: "Equip new",
       value: "EQUIP_NEW",
       className: "btn btn--primary"
+    },
+    {
+      label: "Keep Current",
+      value: "KEEP_CURRENT",
+      className: "btn"
     }
   ];
 }
@@ -642,25 +748,59 @@ function renderEquipmentOfferHtml_(offer) {
   const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
   const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
 
-  let comparisonText = "Choose which item to keep.";
-  if (cmp === "UPGRADE") comparisonText = "The new item is better than your current one.";
-  if (cmp === "DOWNGRADE") comparisonText = "The new item is weaker than your current one.";
-  if (cmp === "DUPLICATE") comparisonText = "The new item is identical to your current one.";
+  let baseRule = "Choose which item to equip. The other will be scanned for residual Cadburrion particles and converted into data points. Higher-grade equipment yields stronger particle recovery.";
 
-  let noteHtml = "";
+  let comparisonText = baseRule;
+
+  if (cmp === "UPGRADE") {
+    comparisonText =
+      "The new equipment is better than your current equipment. " +
+      "Upgrading improves field performance, but yields fewer data points immediately. " +
+      baseRule;
+  }
+
+  if (cmp === "DOWNGRADE") {
+    comparisonText =
+      "The new equipment is weaker than your current equipment. " +
+      "Downgrading yields more data points immediately, but means sacrificing field performance." +
+      baseRule;
+  }
+
+  if (cmp === "DUPLICATE") {
+    comparisonText =
+      "The new equipment is identical to your current equipment. " +
+      "The duplicate will be scanned for residual Cadburrion particles and converted into data points." +
+      baseRule;
+  }
+
+ let noteHtml = "";
+
   if (cmp === "DUPLICATE") {
     noteHtml =
       '<div class="small">' +
-        'You already have this item equipped.<br><br>' +
-        'If you keep your current ' + escapeHtml_(meta.label) +
-        ', the duplicate is returned for <strong>' + incomingSellValue + ' data points</strong>.' +
+        '<strong>Keep Current:</strong> The duplicate will be scanned for residual Cadburrion particles and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
       '</div>';
-  } else {
+  } else if (cmp === "UPGRADE") {
     noteHtml =
       '<div class="small">' +
-        '<strong>Keep current:</strong> return the new item for <strong>' + incomingSellValue + ' data points</strong>.' +
+        '<strong>Upgrade:</strong> Upgrade to the new equipment. Your current (weaker) equipment will be scanned for residual Cadburrion particles and converted into <strong>' + equippedSellValue + ' data points</strong>.' +
         '<br><br>' +
-        '<strong>Equip new:</strong> return your current item for <strong>' + equippedSellValue + ' data points</strong>.' +
+        '<strong>Keep Current:</strong> Keep your current equipment. The new (stronger) equipment will be scanned and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
+      '</div>';
+  } else if (cmp === "DOWNGRADE") {
+    noteHtml =
+      '<div class="small">' +
+        '<strong>Downgrade:</strong> Downgrade to the new equipment. Your current (stronger) equipment will be scanned for residual Cadburrion particles and converted into <strong>' + equippedSellValue + ' data points</strong>.' +
+        '<br><br>' +
+        '<strong>Keep Current:</strong> Keep your current equipment. The new (weaker) equipment will be scanned and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
+      '</div>';
+  } else {
+    // fallback
+    noteHtml =
+      '<div class="small">' +
+        '<strong>Equip New:</strong> Return your current item for <strong>' + equippedSellValue + ' data points</strong>.' +
+        '<br><br>' +
+        '<strong>Keep Current:</strong> Return the new item for <strong>' + incomingSellValue + ' data points</strong>.' +
       '</div>';
   }
 
@@ -1390,6 +1530,7 @@ async function pollTeamState_(options) {
   options = options || {};
   if (!teamId) return null;
   const out = await api("teamState", { playerId: playerId, teamId: teamId });
+  applyGameTiming_(out);
   if (!out.ok) {
     setStatus('<span class="bad">Field Link Unstable:</span> ' + (out.error || "teamState failed"));
     return null;
@@ -1449,6 +1590,7 @@ async function pollNearbyEggs() {
     lat: lastPos ? lastPos.lat : "",
     lng: lastPos ? lastPos.lng : ""
   });
+  applyGameTiming_(out);
 
   console.log("[nearbyEggs] keys:", Object.keys(out || {}));
   console.log("[nearbyEggs] claim candidates:", {
@@ -2208,7 +2350,8 @@ async function boot() {
 
   setTopStats();
   renderKitHudPlaceholder_();
-
+  renderGameClock_();
+  startGameClockTicker_();
   const hadPlayerBeforeBoot = !!playerId;
   const hadTeamBeforeBoot = !!teamId || !!teamRole;
 
