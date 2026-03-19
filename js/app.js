@@ -762,14 +762,14 @@ function renderEquipmentOfferHtml_(offer) {
   if (cmp === "DOWNGRADE") {
     comparisonText =
       "The new equipment is weaker than your current equipment. " +
-      "Downgrading yields more data points immediately, but means sacrificing field performance." +
+      "Downgrading yields more data points immediately, but means sacrificing field performance. " +
       baseRule;
   }
 
   if (cmp === "DUPLICATE") {
     comparisonText =
       "The new equipment is identical to your current equipment. " +
-      "The duplicate will be scanned for residual Cadburrion particles and converted into data points." +
+      "The duplicate will be scanned for residual Cadburrion particles and converted into data points. " +
       baseRule;
   }
 
