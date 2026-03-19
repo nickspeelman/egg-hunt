@@ -204,6 +204,221 @@ h1 {
   cursor: not-allowed;
 }
 
+.messageBanner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+
+  /* warm gold highlight */
+  background:
+    linear-gradient(180deg, #f3d97a, #e6c85a);
+
+  color: #2b230a;
+
+  border-top: 1px solid rgba(255,255,255,0.25);
+  border-bottom: 1px solid rgba(0,0,0,0.15);
+
+  box-shadow:
+    0 10px 28px rgba(0,0,0,0.35),
+    0 0 20px rgba(230,200,90,0.25);
+
+  animation: messageBannerPulse 2s ease-in-out infinite;
+}
+
+.messageBanner.hidden {
+  display: none;
+}
+
+.messageBanner__content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.messageBanner__title {
+  font-size: 15px;
+  font-weight: 900;
+  color: #1f1a07;   /* deep warm near-black */
+  line-height: 1.2;
+}
+
+.messageBanner__body {
+  font-size: 13px;
+  color: #2a230a;   /* slightly lighter than title */
+  opacity: 0.95;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.messageBanner__eyebrow {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4a3e12;   /* muted but still readable */
+  opacity: 0.9;
+  margin-bottom: 2px;
+}
+
+.messageBanner__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.messageBanner__count {
+  font-size: 12px;
+  font-weight: 800;
+  color: #4a3e12;
+  opacity: 0.95;
+}
+
+.messageBanner .btn {
+  background: rgba(31,26,7,0.92);
+  color: #f3d97a;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  font-weight: 800;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.messageBanner .btn:hover {
+  background: #1a1606;
+  color: #f7df86;
+  transform: translateY(-1px);
+}
+
+.messageBanner .btn:active {
+  transform: translateY(0);
+}
+
+@keyframes messageBannerPulse {
+  0%, 100% {
+    box-shadow:
+      0 10px 24px rgba(0,0,0,0.22),
+      0 0 0 rgba(122,167,255,0.00),
+      inset 0 0 0 1px rgba(255,255,255,0.05);
+  }
+  50% {
+    box-shadow:
+      0 10px 24px rgba(0,0,0,0.22),
+      0 0 24px rgba(122,167,255,0.20),
+      inset 0 0 0 1px rgba(255,255,255,0.08);
+  }
+}
+
+.messageList {
+  display: grid;
+  gap: 8px;
+}
+
+.messageList__empty {
+  color: var(--muted);
+}
+
+.messageItem {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.messageItem:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.messageItem--unread {
+  border-color: rgba(122,167,255,0.35);
+  box-shadow: 0 8px 24px rgba(122,167,255,0.10);
+}
+
+.messageItem__meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.messageBadge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.messageBadge--unread {
+  color: var(--text);
+  border-color: rgba(122,167,255,0.35);
+}
+
+.messageBadge--active {
+  color: var(--ok);
+}
+
+.messageBadge--expired {
+  color: var(--danger);
+}
+
+.messageItem__title {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.messageItem__body {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.messageDetailMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.messageDetailBody {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.messageDetailHooks {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .messageBanner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .messageBanner__actions {
+    align-items: stretch;
+  }
+}
+
 .status {
   font-size: 13px;
   line-height: 1.3;

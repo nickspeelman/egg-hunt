@@ -25,6 +25,19 @@
         Operation E.G.G.
       </h1>
 
+      <div id="messageBanner" class="messageBanner hidden" aria-live="polite" aria-atomic="true">
+        <div class="messageBanner__content">
+          <div class="messageBanner__eyebrow">Unread Message</div>
+          <div class="messageBanner__title" id="messageBannerTitle">—</div>
+          <div class="messageBanner__body" id="messageBannerBody">—</div>
+        </div>
+
+        <div class="messageBanner__actions">
+          <div class="messageBanner__count mono" id="messageBannerCount"></div>
+          <button type="button" class="btn btn--primary" id="messageBannerBtn">View Message</button>
+        </div>
+      </div>
+
       <div class="mapWrap">
         <div id="map"></div>
 
@@ -40,6 +53,9 @@
           <div class="pill">Data Points: <strong id="score">0</strong></div>
           <div class="pill">Detected: <strong id="revealedCount">0</strong></div>
           <div class="pill pill--clock">Clock: <strong id="gameClock" class="mono">—</strong></div>
+          <button class="btn" id="messagesBtn" title="View message archive">
+            Messages
+          </button>
 
           <button class="btn btn--radar" id="radarBtn" title="Cadburrion sweep (PRIMARY only)">
             📡 Cadburrion Sweep

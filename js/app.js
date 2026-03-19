@@ -51,6 +51,7 @@ let gameStartMs = null;
 let gameEndMs = null;
 let serverClockOffsetMs = 0;
 let gameClockIntervalId = null;
+let messageFeed_ = [];
 
 // Egg type enums
 const EGG_COLORS = ["RED", "BLUE", "YELLOW"];
@@ -449,6 +450,16 @@ function showModal_(opts) {
     };
 
     modalSetVisible_(true);
+    
+    if (typeof opts.onRender === "function") {
+      opts.onRender({
+        root: root,
+        body: body,
+        actions: actions,
+        input: input,
+        finish: finish
+      });
+    }
 
     if (opts.input) {
       setTimeout(() => {
@@ -556,8 +567,10 @@ function renderGameClock_() {
     return;
   }
 
-  el.textContent = formatGameTimeRemaining(gameEndMs - nowMs);
+  el.textContent = formatGameTimeRemaining(gameEndMs - nowMs); 
+  renderMessageUi_();
 }
+
 
 function applyGameTiming_(payload) {
   if (!payload || !payload.serverNowTs) return;
@@ -581,6 +594,325 @@ function startGameClockTicker_() {
   gameClockIntervalId = setInterval(function() {
     renderGameClock_();
   }, 1000);
+}
+
+function messageReadKey_() {
+  return "eggHunt_readMessages_" + String(teamId || "solo") + "_" + String(playerId || "anon");
+}
+
+function getReadMessageIds_() {
+  try {
+    const raw = localStorage.getItem(messageReadKey_()) || "[]";
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveReadMessageIds_(ids) {
+  localStorage.setItem(messageReadKey_(), JSON.stringify(Array.from(new Set((ids || []).map(String)))));
+}
+
+function isMessageRead_(msg) {
+  return getReadMessageIds_().includes(String(msg && msg.id || ""));
+}
+
+function markMessageRead_(messageId) {
+  messageId = String(messageId || "");
+  if (!messageId) return;
+
+  const ids = getReadMessageIds_();
+  if (!ids.includes(messageId)) {
+    ids.push(messageId);
+    saveReadMessageIds_(ids);
+  }
+
+  renderMessageUi_();
+}
+
+function normalizeMessage_(msg) {
+  msg = (msg && typeof msg === "object") ? msg : {};
+
+  const startTs = Number(msg.startTs);
+  const endTs = Number(msg.endTs);
+  const priority = Number(msg.priority);
+
+  return {
+    id: String(msg.id || ""),
+    type: String(msg.type || "info"),
+    title: String(msg.title || ""),
+    body: String(msg.body || ""),
+    startTs: Number.isFinite(startTs) ? startTs : null,
+    endTs: Number.isFinite(endTs) ? endTs : null,
+    priority: Number.isFinite(priority) ? priority : 0,
+    overlayType: msg.overlayType == null ? null : String(msg.overlayType),
+    overlayKey: msg.overlayKey == null ? null : String(msg.overlayKey),
+    eventKey: msg.eventKey == null ? null : String(msg.eventKey)
+  };
+}
+
+function setMessageFeed_(messages) {
+  messageFeed_ = (Array.isArray(messages) ? messages : []).map(normalizeMessage_);
+  renderMessageUi_();
+}
+
+function isMessageActive_(msg) {
+  const now = currentServerNowMs_();
+
+  if (Number.isFinite(msg.startTs) && now < msg.startTs) return false;
+  if (Number.isFinite(msg.endTs) && now > msg.endTs) return false;
+
+  return true;
+}
+
+function isMessageExpired_(msg) {
+  return Number.isFinite(msg.endTs) && currentServerNowMs_() > msg.endTs;
+}
+
+function messageTypeLabel_(type) {
+  const t = String(type || "").toLowerCase();
+  if (!t) return "Info";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function messageClockLabel_(targetTs) {
+  if (!Number.isFinite(targetTs) || !Number.isFinite(gameEndMs)) return "";
+  return formatGameTimeRemaining(Math.max(0, gameEndMs - targetTs));
+}
+
+function messageStateLabel_(msg) {
+  if (isMessageActive_(msg)) return "Active";
+  if (isMessageExpired_(msg)) return "Expired";
+  return "Upcoming";
+}
+
+function compareMessages_(a, b) {
+  const aActiveUnread = isMessageActive_(a) && !isMessageRead_(a) ? 1 : 0;
+  const bActiveUnread = isMessageActive_(b) && !isMessageRead_(b) ? 1 : 0;
+  if (aActiveUnread !== bActiveUnread) return bActiveUnread - aActiveUnread;
+
+  const aActive = isMessageActive_(a) ? 1 : 0;
+  const bActive = isMessageActive_(b) ? 1 : 0;
+  if (aActive !== bActive) return bActive - aActive;
+
+  const aUnread = !isMessageRead_(a) ? 1 : 0;
+  const bUnread = !isMessageRead_(b) ? 1 : 0;
+  if (aUnread !== bUnread) return bUnread - aUnread;
+
+  if (a.priority !== b.priority) return b.priority - a.priority;
+
+  const aStart = Number.isFinite(a.startTs) ? a.startTs : -Infinity;
+  const bStart = Number.isFinite(b.startTs) ? b.startTs : -Infinity;
+  if (aStart !== bStart) return bStart - aStart;
+
+  return String(a.id).localeCompare(String(b.id));
+}
+
+function getSortedMessages_() {
+  return messageFeed_.slice().sort(compareMessages_);
+}
+
+function getUnreadActiveMessages_() {
+  return getSortedMessages_().filter(function(msg) {
+    return isMessageActive_(msg) && !isMessageRead_(msg);
+  });
+}
+
+function messagePreviewText_(msg) {
+  const body = String(msg && msg.body || "").trim();
+  if (!body) return "";
+  return body.length > 120 ? body.slice(0, 117) + "..." : body;
+}
+
+function buildMessageDetailHtml_(msg) {
+  const meta = [];
+  const stateLabel = messageStateLabel_(msg);
+
+  meta.push('<span class="messageBadge">' + escapeHtml_(messageTypeLabel_(msg.type)) + '</span>');
+
+  if (!isMessageRead_(msg)) {
+    meta.push('<span class="messageBadge messageBadge--unread">Unread</span>');
+  }
+
+  if (stateLabel === "Active") {
+    meta.push('<span class="messageBadge messageBadge--active">Active</span>');
+  } else if (stateLabel === "Expired") {
+    meta.push('<span class="messageBadge messageBadge--expired">Expired</span>');
+  } else {
+    meta.push('<span class="messageBadge">Upcoming</span>');
+  }
+
+  if (Number.isFinite(msg.startTs)) {
+    meta.push('<span class="messageBadge">Starts ' + escapeHtml_(messageClockLabel_(msg.startTs)) + '</span>');
+  }
+
+  if (Number.isFinite(msg.endTs)) {
+    meta.push('<span class="messageBadge">Ends ' + escapeHtml_(messageClockLabel_(msg.endTs)) + '</span>');
+  }
+
+  let hooksHtml = "";
+  if (msg.overlayType || msg.overlayKey || msg.eventKey) {
+    hooksHtml =
+      '<div class="messageDetailHooks">' +
+        (msg.overlayType ? '<div><strong>Overlay Type:</strong> ' + escapeHtml_(msg.overlayType) + '</div>' : '') +
+        (msg.overlayKey ? '<div><strong>Overlay Key:</strong> ' + escapeHtml_(msg.overlayKey) + '</div>' : '') +
+        (msg.eventKey ? '<div><strong>Event Key:</strong> ' + escapeHtml_(msg.eventKey) + '</div>' : '') +
+      '</div>';
+  }
+
+  return (
+    '<div class="messageDetailMeta">' + meta.join("") + '</div>' +
+    '<div class="messageDetailBody">' + escapeHtml_(msg.body || "") + '</div>' +
+    hooksHtml
+  );
+}
+
+async function openMessageById_(messageId) {
+  const msg = messageFeed_.find(function(m) { return String(m.id) === String(messageId); });
+  if (!msg) return;
+
+  markMessageRead_(msg.id);
+
+  await showModal_({
+    title: msg.title || "Message",
+    html: buildMessageDetailHtml_(msg),
+    buttons: [
+      { label: "Close", value: true, className: "btn btn--primary" }
+    ],
+    dismissValue: true
+  });
+
+  renderMessageUi_();
+}
+
+function buildMessageArchiveHtml_() {
+  const messages = getSortedMessages_();
+
+  if (!messages.length) {
+    return '<div class="messageList__empty">No messages yet.</div>';
+  }
+
+  return (
+    '<div class="messageList">' +
+      messages.map(function(msg) {
+        const stateLabel = messageStateLabel_(msg);
+        const badges = [
+          '<span class="messageBadge">' + escapeHtml_(messageTypeLabel_(msg.type)) + '</span>'
+        ];
+
+        if (!isMessageRead_(msg)) {
+          badges.push('<span class="messageBadge messageBadge--unread">Unread</span>');
+        }
+
+        if (stateLabel === "Active") {
+          badges.push('<span class="messageBadge messageBadge--active">Active</span>');
+        } else if (stateLabel === "Expired") {
+          badges.push('<span class="messageBadge messageBadge--expired">Expired</span>');
+        } else {
+          badges.push('<span class="messageBadge">Upcoming</span>');
+        }
+
+        if (Number.isFinite(msg.endTs)) {
+          badges.push('<span class="messageBadge">Ends ' + escapeHtml_(messageClockLabel_(msg.endTs)) + '</span>');
+        }
+
+        return (
+          '<button type="button" class="messageItem ' + (!isMessageRead_(msg) ? 'messageItem--unread' : '') + '" data-message-id="' + escapeHtml_(msg.id) + '">' +
+            '<div class="messageItem__meta">' + badges.join("") + '</div>' +
+            '<div class="messageItem__title">' + escapeHtml_(msg.title || "Message") + '</div>' +
+            '<div class="messageItem__body">' + escapeHtml_(messagePreviewText_(msg)) + '</div>' +
+          '</button>'
+        );
+      }).join("") +
+    '</div>'
+  );
+}
+
+async function openMessagesArchive_() {
+  await showModal_({
+    title: "Messages",
+    html: buildMessageArchiveHtml_(),
+    buttons: [
+      { label: "Close", value: true, className: "btn btn--primary" }
+    ],
+    dismissValue: true,
+    onRender: function(ctx) {
+      const nodes = ctx.body.querySelectorAll("[data-message-id]");
+      nodes.forEach(function(node) {
+        node.onclick = function() {
+          const id = node.getAttribute("data-message-id");
+          ctx.finish(true);
+          setTimeout(function() {
+            openMessageById_(id).catch(function() {});
+          }, 0);
+        };
+      });
+    }
+  });
+
+  renderMessageUi_();
+}
+
+async function openTopUnreadMessage_() {
+  const unread = getUnreadActiveMessages_();
+  if (unread.length) {
+    await openMessageById_(unread[0].id);
+    return;
+  }
+  await openMessagesArchive_();
+}
+
+function renderMessageUi_() {
+  const unread = getUnreadActiveMessages_();
+
+  const banner = $("messageBanner");
+  const bannerTitle = $("messageBannerTitle");
+  const bannerBody = $("messageBannerBody");
+  const bannerCount = $("messageBannerCount");
+  const messagesBtn = $("messagesBtn");
+
+  if (messagesBtn) {
+    messagesBtn.textContent = unread.length ? ("Messages (" + unread.length + ")") : "Messages";
+  }
+
+  if (!banner || !bannerTitle || !bannerBody || !bannerCount) return;
+
+  if (!unread.length) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  const top = unread[0];
+  bannerTitle.textContent = top.title || "Unread Message";
+  bannerBody.textContent = messagePreviewText_(top) || "Tap to view the latest message.";
+  bannerCount.textContent = unread.length > 1 ? (unread.length + " unread") : "1 unread";
+  banner.classList.remove("hidden");
+}
+
+function wireMessagesUi_() {
+  const archiveBtn = $("messagesBtn");
+  const bannerBtn = $("messageBannerBtn");
+  const banner = $("messageBanner");
+
+  if (archiveBtn) {
+    archiveBtn.onclick = function() {
+      openMessagesArchive_().catch(function() {});
+    };
+  }
+
+  if (bannerBtn) {
+    bannerBtn.onclick = function(e) {
+      e.stopPropagation();
+      openTopUnreadMessage_().catch(function() {});
+    };
+  }
+
+  if (banner) {
+    banner.onclick = function() {
+      openTopUnreadMessage_().catch(function() {});
+    };
+  }
 }
 
 function renderKitHudPlaceholder_() {
@@ -1536,6 +1868,7 @@ async function pollTeamState_(options) {
     return null;
   }
   const st = out.state || {};
+  setMessageFeed_(out.messages || []);
   if (Number.isFinite(st.lastLat) && Number.isFinite(st.lastLng)) {
     lastPos = { lat: st.lastLat, lng: st.lastLng, accuracy: st.lastAccuracyM || 25 };
     updateYouOnMap(lastPos);
@@ -2337,6 +2670,7 @@ async function boot() {
   setStatus('<span class="mono">Linking to ERSD Systems...</span>');
 
   wireResetButton_();
+  wireMessagesUi_();
   if (!$("appModal")) {
     setStatus('<span class="bad">Modal UI failed to load.</span>');
     return;
