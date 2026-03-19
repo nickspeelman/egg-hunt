@@ -325,7 +325,7 @@ function buildClaimScoreHtml_(label, out, lootMsg) {
     }
 
     if (challengeBonusPoints > 0) {
-      const challengeName = String(sb.challengeBonusName || "Cadburrion Bloom Yield");
+      const challengeName = String(sb.challengeBonusName || "Timed Event Yield");
       html +=
         '<div style="margin-top:6px;">' +
         escapeHtml_(challengeName) +
