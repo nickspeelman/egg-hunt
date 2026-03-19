@@ -643,6 +643,7 @@ function normalizeMessage_(msg) {
     type: String(msg.type || "info"),
     title: String(msg.title || ""),
     body: String(msg.body || ""),
+    bodyHtml: msg.bodyHtml == null ? null : String(msg.bodyHtml),
     startTs: Number.isFinite(startTs) ? startTs : null,
     endTs: Number.isFinite(endTs) ? endTs : null,
     priority: Number.isFinite(priority) ? priority : 0,
@@ -719,6 +720,10 @@ function getUnreadActiveMessages_() {
   });
 }
 
+function stripHtml_(html) {
+  return String(html || "").replace(/<[^>]+>/g, " ");
+}
+
 function messagePreviewText_(msg) {
   const body = String(msg && msg.body || "").trim();
   if (!body) return "";
@@ -761,9 +766,13 @@ function buildMessageDetailHtml_(msg) {
       '</div>';
   }
 
+  const bodyHtml = msg.bodyHtml != null
+    ? msg.bodyHtml
+    : escapeHtml_(msg.body || "");
+
   return (
     '<div class="messageDetailMeta">' + meta.join("") + '</div>' +
-    '<div class="messageDetailBody">' + escapeHtml_(msg.body || "") + '</div>' +
+    '<div class="messageDetailBody">' + bodyHtml + '</div>' +
     hooksHtml
   );
 }
