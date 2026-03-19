@@ -790,7 +790,7 @@ function buildMessageArchiveHtml_() {
   const messages = getSortedMessages_();
 
   if (!messages.length) {
-    return '<div class="messageList__empty">No messages yet.</div>';
+    return '<div class="messageList__empty">No notices yet.</div>';
   }
 
   return (
@@ -873,7 +873,7 @@ function renderMessageUi_() {
   const messagesBtn = $("messagesBtn");
 
   if (messagesBtn) {
-    messagesBtn.textContent = unread.length ? ("Messages (" + unread.length + ")") : "Messages";
+    messagesBtn.textContent = unread.length ? ("Notices (" + unread.length + ")") : "Notices";
   }
 
   if (!banner || !bannerTitle || !bannerBody || !bannerCount) return;
