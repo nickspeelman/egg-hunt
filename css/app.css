@@ -16,6 +16,10 @@ body {
   color: var(--text);
 }
 
+.hidden {
+  display: none !important;
+}
+
 header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
@@ -534,6 +538,27 @@ h1 {
   filter: grayscale(40%);
   transform: none;
   box-shadow: none;
+}
+
+.btn--overlay {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 9000;
+
+  font-weight: 800;
+  letter-spacing: .02em;
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  /* darker + more contrast */
+  background: rgba(20, 24, 32, 0.92);
+  color: #f3d97a;
+
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+
+  backdrop-filter: blur(4px);
 }
 
 /* Glow effect for claim ring (Leaflet SVG path) */

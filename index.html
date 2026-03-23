@@ -41,6 +41,15 @@
       <div class="mapWrap">
         <div id="map"></div>
 
+        <button
+          id="messageOverlayClose"
+          class="btn btn--overlay hidden"
+          type="button"
+          aria-hidden="true"
+        >
+          Close Heat Map
+        </button>
+
         <div id="radarOverlay" class="hidden" aria-hidden="true">
           <canvas id="radarCanvas"></canvas>
           <button id="radarClose" class="btn">Close</button>
@@ -57,8 +66,8 @@
             Notices
           </button>
 
-          <button class="btn btn--radar" id="radarBtn" title="Cadburrion sweep (PRIMARY only)">
-            📡 Cadburrion Sweep
+          <button class="btn btn--radar" id="radarBtn" title="Radar (PRIMARY only)">
+            📡 Radar
           </button>
 
           <button
@@ -212,6 +221,8 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
     <!-- App JS -->
     <script src="./js/config.js"></script>

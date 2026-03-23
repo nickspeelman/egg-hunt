@@ -52,6 +52,8 @@ let gameEndMs = null;
 let serverClockOffsetMs = 0;
 let gameClockIntervalId = null;
 let messageFeed_ = [];
+let activeMessageOverlayLayers_ = [];
+let activeMessageOverlayMessageId_ = "";
 
 // Egg type enums
 const EGG_COLORS = ["RED", "BLUE", "YELLOW"];
@@ -631,12 +633,38 @@ function markMessageRead_(messageId) {
   renderMessageUi_();
 }
 
+function normalizeOverlayDef_(overlay) {
+  overlay = (overlay && typeof overlay === "object") ? overlay : {};
+
+  return {
+    overlayType: overlay.overlayType == null ? null : String(overlay.overlayType),
+    overlayKey: overlay.overlayKey == null ? null : String(overlay.overlayKey),
+    data: overlay.data && typeof overlay.data === "object" ? overlay.data : null
+  };
+}
+
 function normalizeMessage_(msg) {
   msg = (msg && typeof msg === "object") ? msg : {};
 
   const startTs = Number(msg.startTs);
   const endTs = Number(msg.endTs);
   const priority = Number(msg.priority);
+
+  let mapOverlays = [];
+  if (Array.isArray(msg.mapOverlays)) {
+    mapOverlays = msg.mapOverlays
+      .map(normalizeOverlayDef_)
+      .filter(function(ov) { return !!ov.overlayType; });
+  } else if (msg.overlayType || msg.overlayKey) {
+    mapOverlays = [
+      normalizeOverlayDef_({
+        overlayType: msg.overlayType,
+        overlayKey: msg.overlayKey,
+        data: msg.overlayData || null
+      })
+    ].filter(function(ov) { return !!ov.overlayType; });
+  }
+
 
   return {
     id: String(msg.id || ""),
@@ -647,8 +675,12 @@ function normalizeMessage_(msg) {
     startTs: Number.isFinite(startTs) ? startTs : null,
     endTs: Number.isFinite(endTs) ? endTs : null,
     priority: Number.isFinite(priority) ? priority : 0,
+
+    // legacy fields preserved so older UI/debug output won't break
     overlayType: msg.overlayType == null ? null : String(msg.overlayType),
     overlayKey: msg.overlayKey == null ? null : String(msg.overlayKey),
+
+    mapOverlays: mapOverlays,
     eventKey: msg.eventKey == null ? null : String(msg.eventKey)
   };
 }
@@ -756,26 +788,167 @@ function buildMessageDetailHtml_(msg) {
     meta.push('<span class="messageBadge">Ends ' + escapeHtml_(messageClockLabel_(msg.endTs)) + '</span>');
   }
 
-  let hooksHtml = "";
-  if (msg.overlayType || msg.overlayKey || msg.eventKey) {
-    hooksHtml =
-      '<div class="messageDetailHooks">' +
-        (msg.overlayType ? '<div><strong>Overlay Type:</strong> ' + escapeHtml_(msg.overlayType) + '</div>' : '') +
-        (msg.overlayKey ? '<div><strong>Overlay Key:</strong> ' + escapeHtml_(msg.overlayKey) + '</div>' : '') +
-        (msg.eventKey ? '<div><strong>Event Key:</strong> ' + escapeHtml_(msg.eventKey) + '</div>' : '') +
-      '</div>';
-  }
-
   const bodyHtml = msg.bodyHtml != null
     ? msg.bodyHtml
     : escapeHtml_(msg.body || "");
 
   return (
     '<div class="messageDetailMeta">' + meta.join("") + '</div>' +
-    '<div class="messageDetailBody">' + bodyHtml + '</div>' +
-    hooksHtml
+    '<div class="messageDetailBody">' + bodyHtml + '</div>'
   );
 }
+
+function getPlayAreaBounds_() {
+  const cfg = window.EGGHUNT_CONFIG || {};
+
+  const south = Number(cfg.PLAY_AREA_SOUTH ?? cfg.BOUNDS_SOUTH ?? cfg.MIN_LAT);
+  const west = Number(cfg.PLAY_AREA_WEST ?? cfg.BOUNDS_WEST ?? cfg.MIN_LNG);
+  const north = Number(cfg.PLAY_AREA_NORTH ?? cfg.BOUNDS_NORTH ?? cfg.MAX_LAT);
+  const east = Number(cfg.PLAY_AREA_EAST ?? cfg.BOUNDS_EAST ?? cfg.MAX_LNG);
+
+  if (
+    Number.isFinite(south) &&
+    Number.isFinite(west) &&
+    Number.isFinite(north) &&
+    Number.isFinite(east)
+  ) {
+    return L.latLngBounds([[south, west], [north, east]]);
+  }
+
+  return null;
+}
+
+function setMessageOverlayHudVisible_(visible) {
+  const btn = $("messageOverlayClose");
+  if (!btn) return;
+  btn.classList.toggle("hidden", !visible);
+  btn.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function renderMessageOverlays_(msg) {
+  clearActiveMessageOverlays_();
+
+  if (!map || !msg || !Array.isArray(msg.mapOverlays) || !msg.mapOverlays.length) {
+    return;
+  }
+
+  const layers = [];
+
+  msg.mapOverlays.forEach(function(overlay) {
+    if (!overlay || !overlay.overlayType) return;
+
+    let layer = null;
+    const overlayType = String(overlay.overlayType || "").toLowerCase();
+
+    if (overlayType === "heatmap") {
+      layer = buildHeatmapLayer_(overlay);
+    }
+
+    if (layer) {
+      layer.addTo(map);
+      layers.push(layer);
+    }
+  });
+
+  activeMessageOverlayLayers_ = layers;
+  activeMessageOverlayMessageId_ = String(msg.id || "");
+}
+
+function activateMessageOverlays_(msg) {
+  renderMessageOverlays_(msg);
+
+  const bounds = getPlayAreaBounds_();
+  if (bounds && bounds.isValid()) {
+    map.fitBounds(bounds, { padding: [20, 20] });
+  }
+
+  setMessageOverlayHudVisible_(activeMessageOverlayLayers_.length > 0);
+
+  // Disable radar while overlay is active
+  const radarBtn = $("radarBtn");
+  if (radarBtn) {
+    radarBtn.disabled = true;
+  }
+}
+
+async function closeActiveMessageOverlay_() {
+  const messageId = activeMessageOverlayMessageId_;
+
+  clearActiveMessageOverlays_();
+
+  if (messageId) {
+    setTimeout(function() {
+      openMessageById_(messageId).catch(function() {});
+    }, 0);
+  }
+}
+
+function clearActiveMessageOverlays_() {
+  if (!map) return;
+
+  activeMessageOverlayLayers_.forEach(function(layer) {
+    try {
+      if (layer && map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    } catch (e) {}
+  });
+
+  activeMessageOverlayLayers_ = [];
+  activeMessageOverlayMessageId_ = "";
+
+  // ✅ THIS WAS MISSING
+  setMessageOverlayHudVisible_(false);
+    // Re-enable radar after overlay closes
+  const radarBtn = $("radarBtn");
+  if (radarBtn) {
+    radarBtn.disabled = false;
+  }
+}
+
+function normalizeHeatPoint_(pt) {
+  pt = (pt && typeof pt === "object") ? pt : {};
+
+  const lat = Number(pt.lat);
+  const lng = Number(pt.lng);
+  const weight = Number(pt.weight);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return [
+    lat,
+    lng,
+    Number.isFinite(weight) ? Math.max(0, weight) : 0.5
+  ];
+}
+
+function buildHeatmapLayer_(overlay) {
+  if (typeof L === "undefined" || typeof L.heatLayer !== "function") {
+    console.warn("Leaflet heat plugin not loaded.");
+    return null;
+  }
+
+  const data = overlay && overlay.data && typeof overlay.data === "object"
+    ? overlay.data
+    : {};
+
+  const rawPoints = Array.isArray(data.points) ? data.points : [];
+  const points = rawPoints
+    .map(normalizeHeatPoint_)
+    .filter(function(pt) { return !!pt; });
+
+  if (!points.length) return null;
+
+  return L.heatLayer(points, {
+    pane: "messageOverlayPane",
+    radius: Number.isFinite(Number(data.radius)) ? Number(data.radius) : 28,
+    blur: Number.isFinite(Number(data.blur)) ? Number(data.blur) : 20,
+    maxZoom: Number.isFinite(Number(data.maxZoom)) ? Number(data.maxZoom) : 18,
+    minOpacity: Number.isFinite(Number(data.minOpacity)) ? Number(data.minOpacity) : 0.25
+  });
+}
+
+
 
 async function openMessageById_(messageId) {
   const msg = messageFeed_.find(function(m) { return String(m.id) === String(messageId); });
@@ -783,14 +956,33 @@ async function openMessageById_(messageId) {
 
   markMessageRead_(msg.id);
 
-  await showModal_({
+  const overlays = Array.isArray(msg.mapOverlays) ? msg.mapOverlays : [];
+  const hasHeatmap = overlays.some(function(ov) {
+    return String(ov && ov.overlayType || "").toLowerCase() === "heatmap";
+  });
+
+  const buttons = [
+    { label: "Close", value: "close", className: "btn btn--primary" }
+  ];
+
+  if (hasHeatmap) {
+    buttons.unshift({
+      label: "View Heat Map",
+      value: "view_heatmap",
+      className: "btn"
+    });
+  }
+
+  const decision = await showModal_({
     title: msg.title || "Message",
     html: buildMessageDetailHtml_(msg),
-    buttons: [
-      { label: "Close", value: true, className: "btn btn--primary" }
-    ],
-    dismissValue: true
+    buttons: buttons,
+    dismissValue: "close"
   });
+
+  if (decision === "view_heatmap") {
+    activateMessageOverlays_(msg);
+  }
 
   renderMessageUi_();
 }
@@ -1878,6 +2070,11 @@ async function pollTeamState_(options) {
   }
   const st = out.state || {};
   setMessageFeed_(out.messages || []);
+  console.log("[messages payload]", out.messages);
+  if (out.activeMap && Array.isArray(out.activeMap.playBoundary)) {
+    window.EGGHUNT_CONFIG = window.EGGHUNT_CONFIG || {};
+    window.EGGHUNT_CONFIG.PLAY_BOUNDARY = out.activeMap.playBoundary;
+  }
   if (Number.isFinite(st.lastLat) && Number.isFinite(st.lastLng)) {
     lastPos = { lat: st.lastLat, lng: st.lastLng, accuracy: st.lastAccuracyM || 25 };
     updateYouOnMap(lastPos);
@@ -2134,10 +2331,14 @@ function initMap() {
     zoomSnap: 0.5,
     zoomDelta: 0.5
   });
+
   // Rings pane (claim/reveal circles) — above normal overlays, below markers
   map.createPane("ringsPane");
-  // overlayPane ~400, markerPane ~600
   map.getPane("ringsPane").style.zIndex = 450;
+
+  // Message overlays pane
+  map.createPane("messageOverlayPane");
+  map.getPane("messageOverlayPane").style.zIndex = 430;
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 21,
@@ -2156,6 +2357,15 @@ function initMap() {
       youMarker.setIcon(playerIcon_(z));
     }
   });
+
+  const overlayCloseBtn = $("messageOverlayClose");
+  if (overlayCloseBtn) {
+    overlayCloseBtn.onclick = function() {
+      closeActiveMessageOverlay_().catch(function() {});
+    };
+  }
+
+  setMessageOverlayHudVisible_(false);
 }
 
 function refreshMapLayout_() {
