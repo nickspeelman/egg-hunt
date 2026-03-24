@@ -100,6 +100,10 @@ function hunterSizeForZoom_(zoom) {
 }
 
 function eggLabel_(egg) {
+  if (String(egg && egg.specialType || "").toUpperCase() === "EGG_PRIME") {
+    return "Egg<sup>0</sup>";
+  }
+
   const c = properCase_(egg.color || "RED");
   const p = patternDisplayName_(egg.pattern || "SOLID");
   return c + " " + p;
@@ -169,6 +173,27 @@ function eggIcon_(color, pattern, zoom) {
   return L.divIcon({
     className: "egg-icon",
     html: svg,
+    iconSize: [w, h],
+    iconAnchor: [Math.round(w / 2), h - 2],
+    popupAnchor: [0, -Math.round(h * 0.85)]
+  });
+}
+
+function eggPrimeIcon_(iconUrl, zoom) {
+  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
+  const sz = eggSizeForZoom_(z, "CROWN");
+
+  const w = Math.round(sz.w * 1.25);
+  const h = Math.round(sz.h * 1.25);
+
+  const html =
+    '<img src="' + escapeHtml_(iconUrl || "./assets/egg-prime.gif") + '" ' +
+    'alt="" ' +
+    'style="display:block;width:' + w + 'px;height:' + h + 'px;object-fit:contain;" />';
+
+  return L.divIcon({
+    className: "egg-icon egg-icon--prime",
+    html: html,
     iconSize: [w, h],
     iconAnchor: [Math.round(w / 2), h - 2],
     popupAnchor: [0, -Math.round(h * 0.85)]
@@ -685,8 +710,35 @@ function normalizeMessage_(msg) {
   };
 }
 
+function dedupeMessagesById_(messages) {
+  messages = Array.isArray(messages) ? messages : [];
+
+  const seen = new Set();
+  const out = [];
+
+  messages.forEach(function(msg) {
+    msg = (msg && typeof msg === "object") ? msg : null;
+    if (!msg) return;
+
+    const id = String(msg.id || "").trim();
+
+    if (!id) {
+      out.push(msg);
+      return;
+    }
+
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(msg);
+  });
+
+  return out;
+}
+
 function setMessageFeed_(messages) {
-  messageFeed_ = (Array.isArray(messages) ? messages : []).map(normalizeMessage_);
+  messageFeed_ = dedupeMessagesById_(
+    (Array.isArray(messages) ? messages : []).map(normalizeMessage_)
+  );
   renderMessageUi_();
 }
 
@@ -1980,7 +2032,12 @@ function buildEggPopupHtml_(marker) {
   }
 
   return (
-    "<b>" + eggLabel_({ color: marker._eggColor, pattern: marker._eggPattern }) + "</b><br/>" +
+    "<b>" + eggLabel_({
+      color: marker._eggColor,
+      pattern: marker._eggPattern,
+      specialType: marker._specialType,
+      title: marker._title
+    }) + "</b><br/>" +
     "~" + d + "m away<br/><br/>" +
     claimUi
   );
@@ -2022,17 +2079,23 @@ function bindClaimButton_(marker) {
 function upsertEggMarker(egg) {
   if (eggMarkers.has(egg.eggId)) return;
 
+  const isPrime = String(egg && egg.specialType || "").toUpperCase() === "EGG_PRIME";
+
   const fc = String($("filterColor").value || "").toUpperCase();
   const fp = String($("filterPattern").value || "").toUpperCase();
-  if ((fc && String(egg.color || "").toUpperCase() !== fc) ||
-      (fp && String(egg.pattern || "").toUpperCase() !== fp)) {
-    return;
+
+  if (!isPrime) {
+    if ((fc && String(egg.color || "").toUpperCase() !== fc) ||
+        (fp && String(egg.pattern || "").toUpperCase() !== fp)) {
+      return;
+    }
   }
 
-  const m = L.marker(
-    [egg.lat, egg.lng],
-    { icon: eggIcon_(egg.color, egg.pattern, map.getZoom()) }
-  ).addTo(map);
+  const icon = isPrime
+    ? eggPrimeIcon_(egg.iconUrl || "./assets/egg-prime.gif", map.getZoom())
+    : eggIcon_(egg.color, egg.pattern, map.getZoom());
+
+  const m = L.marker([egg.lat, egg.lng], { icon: icon }).addTo(map);
 
   m._eggId = egg.eggId;
   m._eggLat = Number(egg.lat);
@@ -2040,6 +2103,9 @@ function upsertEggMarker(egg) {
   m._eggColor = egg.color;
   m._eggPattern = egg.pattern;
   m._eggDistanceMeters = Number(egg.distanceMeters || 0);
+  m._specialType = egg.specialType || "";
+  m._title = egg.title || "";
+  m._iconUrl = egg.iconUrl || "";
 
   m.bindPopup(buildEggPopupHtml_(m));
 
@@ -2242,10 +2308,12 @@ async function claimEgg(eggId) {
     setTopStats();
 
     // Success message
-    const label =
-      out.color && out.pattern
-        ? properCase_(out.color) + " " + properCase_(out.pattern)
-        : properCase_(out.rarity || "Egg");
+     const label =
+      String(out.specialType || "").toUpperCase() === "EGG_PRIME"
+        ? String(out.title || "Egg Prime")
+        : (out.color && out.pattern
+            ? properCase_(out.color) + " " + properCase_(out.pattern)
+            : properCase_(out.rarity || "Egg"));
 
     let lootMsg = "";
     if (out.loot) {
@@ -2350,7 +2418,13 @@ function initMap() {
     const z = map.getZoom();
 
     eggMarkers.forEach(function(m) {
-      m.setIcon(eggIcon_(m._eggColor, m._eggPattern, z));
+      const isPrime = String(m._specialType || "").toUpperCase() === "EGG_PRIME";
+
+      if (isPrime) {
+        m.setIcon(eggPrimeIcon_(m._iconUrl || "./assets/egg-prime.gif", z));
+      } else {
+        m.setIcon(eggIcon_(m._eggColor, m._eggPattern, z));
+      }
     });
 
     if (youMarker) {
