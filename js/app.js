@@ -4,7 +4,7 @@
 // Config
 // -----------------------------
 const API_URL = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.API_URL) || "";
-const POLL_MS = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.POLL_MS) || 1000;
+const POLL_MS = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.POLL_MS) || 3000;
 const CENTER_LAT = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.CENTER_LAT) || 39.9612;
 const CENTER_LNG = (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.CENTER_LNG) || -82.9988;
 // Fallback radii (meters) if backend doesn't return them yet
@@ -33,6 +33,9 @@ let revealCircle = null;
 let lastClaimMeters = null;
 let lastRevealMeters = null;
 
+
+
+
 // Radar state
 // Radar state
 function radarPlayedKey_() {
@@ -42,7 +45,11 @@ function radarPlayedKey_() {
 
 let lastRadarIdPlayed = localStorage.getItem(radarPlayedKey_()) || "";
 let radarAnimating = false;
+let radarRequestInFlight = false;
 let radarPrevView = null; // { center, zoom }
+let radarQueuedId_ = "";
+let radarActiveId_ = "";
+let radarSeenIds_ = new Set();
 let eggMarkers = new Map(); // eggId -> Leaflet marker
 let lastPos = null;
 let startupLoading_ = false;
@@ -50,6 +57,7 @@ const FIRST_SETUP_RELOAD_KEY_ = "eggHunt_firstSetupReloadDone";
 let gameStartMs = null;
 let gameEndMs = null;
 let serverClockOffsetMs = 0;
+let hasServerClockSync_ = false;
 let gameClockIntervalId = null;
 let messageFeed_ = [];
 let activeMessageOverlayLayers_ = [];
@@ -305,6 +313,17 @@ function patternDisplayName_(pattern) {
 
 function formatBonusPercent_(multiplier) {
   return "+" + Math.round(Number(multiplier || 0) * 100) + "%";
+}
+
+function formatMetersDisplay_(meters) {
+  const n = Number(meters);
+  if (!Number.isFinite(n)) return "0";
+
+  // Whole numbers show as integers; otherwise show one decimal max.
+  const roundedTenth = Math.round(n * 10) / 10;
+  return Number.isInteger(roundedTenth)
+    ? String(Math.round(roundedTenth))
+    : roundedTenth.toFixed(1);
 }
 
 function buildClaimScoreHtml_(label, out, lootMsg) {
@@ -604,7 +623,22 @@ function applyGameTiming_(payload) {
 
   const serverNowMs = Date.parse(payload.serverNowTs);
   if (Number.isFinite(serverNowMs)) {
-    serverClockOffsetMs = serverNowMs - Date.now();
+    const measuredOffsetMs = serverNowMs - Date.now();
+
+    if (!hasServerClockSync_) {
+      serverClockOffsetMs = measuredOffsetMs;
+      hasServerClockSync_ = true;
+    } else {
+      const driftMs = measuredOffsetMs - serverClockOffsetMs;
+
+      // If we're way off, snap immediately.
+      // Otherwise, ease toward the new value to avoid visible jumps.
+      if (Math.abs(driftMs) > 1500) {
+        serverClockOffsetMs = measuredOffsetMs;
+      } else {
+        serverClockOffsetMs = serverClockOffsetMs + (driftMs * 0.2);
+      }
+    }
   }
 
   const nextStartMs = Date.parse(payload.gameStartTs || "");
@@ -620,7 +654,7 @@ function startGameClockTicker_() {
   if (gameClockIntervalId) return;
   gameClockIntervalId = setInterval(function() {
     renderGameClock_();
-  }, 1000);
+  }, 250);
 }
 
 function messageReadKey_() {
@@ -798,6 +832,12 @@ function getSortedMessages_() {
   return messageFeed_.slice().sort(compareMessages_);
 }
 
+function getUnreadMessages_() {
+  return getSortedMessages_().filter(function(msg) {
+    return !isMessageRead_(msg);
+  });
+}
+
 function getUnreadActiveMessages_() {
   return getSortedMessages_().filter(function(msg) {
     return isMessageActive_(msg) && !isMessageRead_(msg);
@@ -916,11 +956,6 @@ function activateMessageOverlays_(msg) {
 
   setMessageOverlayHudVisible_(activeMessageOverlayLayers_.length > 0);
 
-  // Disable radar while overlay is active
-  const radarBtn = $("radarBtn");
-  if (radarBtn) {
-    radarBtn.disabled = true;
-  }
 }
 
 async function closeActiveMessageOverlay_() {
@@ -951,11 +986,6 @@ function clearActiveMessageOverlays_() {
 
   // ✅ THIS WAS MISSING
   setMessageOverlayHudVisible_(false);
-    // Re-enable radar after overlay closes
-  const radarBtn = $("radarBtn");
-  if (radarBtn) {
-    radarBtn.disabled = false;
-  }
 }
 
 function normalizeHeatPoint_(pt) {
@@ -1117,7 +1147,8 @@ async function openTopUnreadMessage_() {
 }
 
 function renderMessageUi_() {
-  const unread = getUnreadActiveMessages_();
+  const unreadAll = getUnreadMessages_();
+  const unreadActive = getUnreadActiveMessages_();
 
   const banner = $("messageBanner");
   const bannerTitle = $("messageBannerTitle");
@@ -1126,20 +1157,20 @@ function renderMessageUi_() {
   const messagesBtn = $("messagesBtn");
 
   if (messagesBtn) {
-    messagesBtn.textContent = unread.length ? ("Notices (" + unread.length + ")") : "Notices";
+    messagesBtn.textContent = unreadAll.length ? ("Notices (" + unreadAll.length + ")") : "Notices";
   }
 
   if (!banner || !bannerTitle || !bannerBody || !bannerCount) return;
 
-  if (!unread.length) {
+  if (!unreadActive.length) {
     banner.classList.add("hidden");
     return;
   }
 
-  const top = unread[0];
+  const top = unreadActive[0];
   bannerTitle.textContent = top.title || "Unread Message";
   bannerBody.textContent = messagePreviewText_(top) || "Tap to view the latest message.";
-  bannerCount.textContent = unread.length > 1 ? (unread.length + " unread") : "1 unread";
+  bannerCount.textContent = unreadActive.length > 1 ? (unreadActive.length + " unread") : "1 unread";
   banner.classList.remove("hidden");
 }
 
@@ -1477,6 +1508,32 @@ function clearRadarCooldown_() {
     radarCooldownTimer = null;
   }
   updateRadarBtnState_();
+}
+
+function requestRadarPlayback_(payload) {
+  const rid = String((payload && payload.radarId) || "");
+  if (!payload || !rid) return;
+
+  // Already seen in this page session
+  if (radarSeenIds_.has(rid)) return;
+
+  // Already fully played (persisted)
+  if (rid === lastRadarIdPlayed) {
+    radarSeenIds_.add(rid);
+    return;
+  }
+
+  // Already queued or currently animating
+  if (rid === radarQueuedId_ || rid === radarActiveId_) return;
+
+  radarQueuedId_ = rid;
+  radarSeenIds_.add(rid);
+
+  playRadar_(payload).catch(function() {
+    if (radarQueuedId_ === rid) radarQueuedId_ = "";
+    if (radarActiveId_ === rid) radarActiveId_ = "";
+    radarSeenIds_.delete(rid);
+  });
 }
 
 function updateRadarBtnState_() {
@@ -2015,6 +2072,7 @@ function eggIsInClaimRange_(marker) {
 function buildEggPopupHtml_(marker) {
   const d = eggDistanceMeters_(marker);
   const claimM = currentClaimMeters_();
+  const claimMDisplay = formatMetersDisplay_(claimM);
   const inRange = eggIsInClaimRange_(marker);
 
   let claimUi = "";
@@ -2027,7 +2085,7 @@ function buildEggPopupHtml_(marker) {
     claimUi =
       '<div class="small">' +
         '<span class="muted">Move closer to scan</span><br/>' +
-        'Need &le; ' + claimM + 'm' +
+        'Need &le; ' + claimMDisplay + 'm' +
       '</div>';
   }
 
@@ -2042,7 +2100,6 @@ function buildEggPopupHtml_(marker) {
     claimUi
   );
 }
-
 function refreshEggMarkerDistances_() {
   if (!map || !lastPos) return;
 
@@ -2157,14 +2214,9 @@ async function pollTeamState_(options) {
     if (rem > 0) startRadarCooldown_(rem);
   }
 
-  // Replay latest RADAR only once per radarId (persisted across refresh)
+  // Replay latest RADAR only once per radarId
   if (st && st.radar && st.radar.radarId) {
-    const rid = String(st.radar.radarId);
-    if (rid && rid !== lastRadarIdPlayed && !radarAnimating) {
-      lastRadarIdPlayed = rid;
-      localStorage.setItem(radarPlayedKey_(), rid);
-      playRadar_(st.radar).catch(function() {});
-    }
+    requestRadarPlayback_(st.radar);
   }
 
   lastTeamState_ = st;
@@ -2597,15 +2649,18 @@ function wireRadarButton_() {
   btn.onclick = async function() {
     if (!teamId || !playerId) return;
     if (!isPrimary_()) return;
+    if (radarRequestInFlight || radarAnimating) return;
 
-       try {
+    radarRequestInFlight = true;
+    btn.disabled = true;
+
+    try {
       await runWithLoading_(
         {
           button: btn,
           delayMs: 150
         },
         async function() {
-          // ONE call only
           const res = await api("radar", { playerId, teamId });
 
           if (!res || !res.ok) {
@@ -2616,19 +2671,17 @@ function wireRadarButton_() {
             return;
           }
 
-          // Success: start cooldown immediately (server tells us how long)
           if (Number.isFinite(res.cooldownMs)) {
             startRadarCooldown_(res.cooldownMs);
           }
-
-          // Mark as played on PRIMARY too (so polling doesn't double-trigger)
-          lastRadarIdPlayed = String(res.radarId || "");
-          localStorage.setItem(radarPlayedKey_(), lastRadarIdPlayed);
-          await playRadar_(res);
+          requestRadarPlayback_(res);
         }
       );
     } catch (e) {
       await modalAlert_(String(e && (e.message || e)), "Radar");
+    } finally {
+      radarRequestInFlight = false;
+      updateRadarBtnState_();
     }
   };
 }
@@ -2774,8 +2827,15 @@ function metersToPixelRadius_(originLat, originLng, meters) {
 }
 
 async function playRadar_(payload) {
+  const radarId = String((payload && payload.radarId) || "");
+
   if (!map || radarAnimating) return;
   radarAnimating = true;
+  radarActiveId_ = radarId;
+
+  if (radarQueuedId_ === radarId) {
+    radarQueuedId_ = "";
+  }
 
   const originLat = Number(payload.originLat);
   const originLng = Number(payload.originLng);
@@ -2935,6 +2995,18 @@ async function playRadar_(payload) {
   }
 
   function finishRadar_() {
+    if (!radarAnimating) return;
+
+    radarAnimating = false;
+    radarQueuedId_ = "";
+
+    if (radarId) {
+      radarActiveId_ = "";
+      lastRadarIdPlayed = radarId;
+      localStorage.setItem(radarPlayedKey_(), radarId);
+      radarSeenIds_.add(radarId);
+    }
+
     setRadarOverlayVisible_(false);
 
     map.dragging && map.dragging.enable();
@@ -2942,7 +3014,6 @@ async function playRadar_(payload) {
     map.doubleClickZoom && map.doubleClickZoom.enable();
 
     if (radarPrevView) map.setView(radarPrevView.center, radarPrevView.zoom);
-    radarAnimating = false;
   }
 
   const onResize = function() { resizeRadarCanvas_(); };
