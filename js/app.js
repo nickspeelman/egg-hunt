@@ -37,6 +37,8 @@ let lastRevealMeters = null;
 
 
 
+
+
 // Radar state
 // Radar state
 function radarPlayedKey_() {
@@ -457,11 +459,14 @@ function showModal_(opts) {
       resolve(value);
     }
 
-    buttons.forEach((b, idx) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = b.className || "btn";
-      btn.textContent = b.label || "OK";
+  buttons.forEach((b, idx) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = b.className || "btn";
+    btn.textContent = b.label || "OK";
+    btn.disabled = !!b.disabled;
+
+    if (!b.disabled) {
       btn.onclick = function() {
         if (opts.input) {
           finish(input.value);
@@ -469,12 +474,14 @@ function showModal_(opts) {
           finish(b.value);
         }
       };
-      actions.appendChild(btn);
+    }
 
-      if (idx === buttons.length - 1) {
-        setTimeout(() => btn.focus(), 0);
-      }
-    });
+    actions.appendChild(btn);
+
+    if (idx === buttons.length - 1 && !b.disabled) {
+      setTimeout(() => btn.focus(), 0);
+    }
+  });
 
     root.querySelectorAll("[data-modal-close]").forEach(el => {
       el.onclick = function() {
@@ -1301,6 +1308,10 @@ function equipmentOfferTitle_(offer) {
 }
 
 function equipmentOfferButtons_(offer) {
+  const isViewerDevice = isViewer_();
+  const disabledClass = isViewerDevice ? " is-disabled" : "";
+  const disabledAttr = !!isViewerDevice;
+
   const cmp = String((offer && offer.comparison) || "").toUpperCase();
 
   if (cmp === "DUPLICATE") {
@@ -1308,7 +1319,8 @@ function equipmentOfferButtons_(offer) {
       {
         label: "Keep Current",
         value: "KEEP_CURRENT",
-        className: "btn btn--primary"
+        className: "btn btn--primary" + disabledClass,
+        disabled: disabledAttr
       }
     ];
   }
@@ -1318,12 +1330,14 @@ function equipmentOfferButtons_(offer) {
       {
         label: "Upgrade",
         value: "EQUIP_NEW",
-        className: "btn btn--primary"
+        className: "btn btn--primary" + disabledClass,
+        disabled: disabledAttr
       },
       {
         label: "Keep Current",
         value: "KEEP_CURRENT",
-        className: "btn"
+        className: "btn" + disabledClass,
+        disabled: disabledAttr
       }
     ];
   }
@@ -1333,12 +1347,14 @@ function equipmentOfferButtons_(offer) {
       {
         label: "Downgrade",
         value: "EQUIP_NEW",
-        className: "btn"
+        className: "btn" + disabledClass,
+        disabled: disabledAttr
       },
       {
         label: "Keep Current",
         value: "KEEP_CURRENT",
-        className: "btn btn--primary"
+        className: "btn btn--primary" + disabledClass,
+        disabled: disabledAttr
       }
     ];
   }
@@ -1347,12 +1363,14 @@ function equipmentOfferButtons_(offer) {
     {
       label: "Equip new",
       value: "EQUIP_NEW",
-      className: "btn btn--primary"
+      className: "btn btn--primary" + disabledClass,
+      disabled: disabledAttr
     },
     {
       label: "Keep Current",
       value: "KEEP_CURRENT",
-      className: "btn"
+      className: "btn" + disabledClass,
+      disabled: disabledAttr
     }
   ];
 }
@@ -1460,6 +1478,23 @@ async function respondEquipmentOffer_(offerId, decision) {
     playerId: playerId,
     teamId: teamId
   });
+}
+
+function dismissActiveEquipmentOffer_(offerId) {
+  const activeId = String(activeEquipmentOfferId_ || "");
+  const targetId = String(offerId || "");
+
+  if (!activeId) return;
+  if (targetId && activeId !== targetId) return;
+  if (typeof activeEquipmentOfferDismiss_ !== "function") return;
+
+  const dismiss = activeEquipmentOfferDismiss_;
+  activeEquipmentOfferDismiss_ = null;
+  activeEquipmentOfferId_ = "";
+
+  try {
+    dismiss("__AUTO_DISMISSED__");
+  } catch (e) {}
 }
 
 function isTeamMode_() { return !!teamId; }
@@ -1656,6 +1691,10 @@ let lootFlowActive_ = false;
 let equipmentOfferFlowActive_ = false;
 let pauseTeamStatePolling_ = false;
 
+// Equipment-offer modal tracking
+let activeEquipmentOfferId_ = "";
+let activeEquipmentOfferDismiss_ = null;
+
 function fmtMs_(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
@@ -1779,13 +1818,51 @@ async function maybeHandleEquipmentOffer_(offer) {
 
   equipmentOfferFlowActive_ = true;
   pauseTeamStatePolling_ = true;
+  activeEquipmentOfferId_ = offerId;
 
   try {
+    const isViewerDevice = isViewer_();
+
+    const extraViewerHtml = isViewerDevice
+      ? '<div class="small" style="margin-top:12px;"><strong>Primary device required.</strong> This notice will close automatically once the primary device resolves it.</div>'
+      : "";
+
     const decision = await showModal_({
       title: equipmentOfferTitle_(offer),
-      html: renderEquipmentOfferHtml_(offer),
-      buttons: equipmentOfferButtons_(offer)
+      html: renderEquipmentOfferHtml_(offer) + extraViewerHtml,
+      buttons: isViewerDevice
+        ? [
+            {
+              label: "Awaiting Primary Device",
+              value: "__VIEWER_WAITING__",
+              className: "btn btn--primary",
+              disabled: true
+            },
+            {
+              label: "Close",
+              value: "close",
+              className: "btn"
+            }
+          ]
+        : equipmentOfferButtons_(offer),
+      dismissValue: isViewerDevice ? "close" : null,
+      onRender: function(ctx) {
+        activeEquipmentOfferDismiss_ = ctx.finish;
+      }
     });
+
+    activeEquipmentOfferDismiss_ = null;
+    activeEquipmentOfferId_ = "";
+
+    if (decision === "__AUTO_DISMISSED__") {
+      console.log("[equipmentOffer] auto-dismissed after primary resolution");
+      return;
+    }
+
+    if (isViewerDevice) {
+      console.log("[equipmentOffer] viewer acknowledged locally");
+      return;
+    }
 
     if (!decision) {
       console.log("[equipmentOffer] no decision returned");
@@ -1811,6 +1888,8 @@ async function maybeHandleEquipmentOffer_(offer) {
     console.error("[equipmentOffer] modal failed:", err);
     throw err;
   } finally {
+    activeEquipmentOfferDismiss_ = null;
+    activeEquipmentOfferId_ = "";
     equipmentOfferFlowActive_ = false;
     pauseTeamStatePolling_ = false;
   }
@@ -2259,10 +2338,13 @@ function updateYouOnMap(p) {
   // Team mode PRIMARY: local player.
   // Team mode VIEWER: do not draw around this device; rings will be drawn
   // from updatePrimaryTeamOnMap_() around the primary device instead.
+   // Rings should only be controlled by the authoritative gameplay position.
+  // Solo mode: local player controls them.
+  // Team PRIMARY: local player controls them.
+  // Team VIEWER: do not update or clear here; the team-state sync will place
+  // them around the primary device position.
   if (!teamId || isPrimary_()) {
     updateRangeRings_(latlng);
-  } else {
-    clearRangeRings_();
   }
 
   // Refresh popup distances for already-revealed eggs
@@ -2554,8 +2636,19 @@ async function pollTeamState_(options) {
     maybeHandleLootOffer_(st).catch(function(){});
   }
 
+  const pendingEquipmentOffer = st.pendingLootOffer || null;
+
+  if (!pendingEquipmentOffer || !pendingEquipmentOffer.offerId) {
+    dismissActiveEquipmentOffer_();
+  } else if (
+    activeEquipmentOfferId_ &&
+    String(activeEquipmentOfferId_) !== String(pendingEquipmentOffer.offerId)
+  ) {
+    dismissActiveEquipmentOffer_(activeEquipmentOfferId_);
+  }
+
   if (!options.skipEquipmentOffer) {
-    maybeHandleEquipmentOffer_(st.pendingLootOffer).catch(function(){});
+    maybeHandleEquipmentOffer_(pendingEquipmentOffer).catch(function(){});
   }
 
   return st;
