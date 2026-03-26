@@ -2254,7 +2254,16 @@ function updateYouOnMap(p) {
   if (accuracyCircle) accuracyCircle.bringToBack();
 
   // Draw/update claim + reveal rings around current position
-  updateRangeRings_(latlng);
+    // Draw rings only around the authoritative gameplay position.
+  // Solo mode: local player.
+  // Team mode PRIMARY: local player.
+  // Team mode VIEWER: do not draw around this device; rings will be drawn
+  // from updatePrimaryTeamOnMap_() around the primary device instead.
+  if (!teamId || isPrimary_()) {
+    updateRangeRings_(latlng);
+  } else {
+    clearRangeRings_();
+  }
 
   // Refresh popup distances for already-revealed eggs
   refreshEggMarkerDistances_();
