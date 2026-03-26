@@ -23,7 +23,8 @@ let teamRole = localStorage.getItem("eggHunt_teamRole") || ""; // PRIMARY | VIEW
 let teamName = localStorage.getItem("eggHunt_teamName") || "";
 
 
-let map, youMarker, accuracyCircle;
+let map, youMarker, accuracyCircle, primaryMarker;
+let lastDevicePos = null;
 
 // Range rings (claim + reveal)
 let claimCircle = null;
@@ -1465,6 +1466,61 @@ function isTeamMode_() { return !!teamId; }
 function isPrimary_() { return String(teamRole || "").toUpperCase() === "PRIMARY"; }
 function isViewer_() { return isTeamMode_() && !isPrimary_(); }
 
+function persistTeamContext_() {
+  localStorage.setItem("eggHunt_teamId", teamId || "");
+  localStorage.setItem("eggHunt_teamRole", teamRole || "");
+  localStorage.setItem("eggHunt_teamName", teamName || "");
+  lastRadarIdPlayed = localStorage.getItem(radarPlayedKey_()) || "";
+}
+
+function roleDisplayLabel_() {
+  if (!isTeamMode_()) return "SOLO MODE";
+  return isPrimary_() ? "PRIMARY DEVICE" : "VIEWER MODE";
+}
+
+function renderTeamContext_() {
+  const pill = $("teamContextPill");
+  const nameEl = $("teamContextName");
+  const roleEl = $("teamContextRole");
+  if (!pill || !nameEl || !roleEl) return;
+
+  if (!isTeamMode_()) {
+    pill.classList.add("hidden");
+    pill.classList.remove("teamContext--primary", "teamContext--viewer");
+    return;
+  }
+
+  nameEl.textContent = teamName || "Unnamed Team";
+  roleEl.textContent = roleDisplayLabel_();
+
+  pill.classList.remove("hidden");
+  pill.classList.toggle("teamContext--primary", isPrimary_());
+  pill.classList.toggle("teamContext--viewer", isViewer_());
+}
+
+function getJoinTeamIdFromUrl_() {
+  try {
+    const url = new URL(window.location.href);
+    return String(url.searchParams.get("join") || "").trim();
+  } catch (e) {
+    return "";
+  }
+}
+
+function clearJoinParamFromUrl_() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("join");
+    window.history.replaceState({}, "", url.toString());
+  } catch (e) {}
+}
+
+function currentJoinUrl_(tid) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("join", String(tid || ""));
+  return url.toString();
+}
+
 // -----------------------------
 // API helper (GET JSON)
 // -----------------------------
@@ -1540,18 +1596,27 @@ function updateRadarBtnState_() {
   const btn = document.getElementById("radarBtn");
   if (!btn) return;
 
+  if (!isTeamMode_()) {
+    btn.disabled = true;
+    btn.classList.remove("isCooldown");
+    btn.textContent = "📡 Radar";
+    btn.setAttribute("aria-disabled", "true");
+    btn.title = "Join or create a team first";
+    return;
+  }
+
+  if (!isPrimary_()) {
+    btn.disabled = true;
+    btn.classList.remove("isCooldown");
+    btn.textContent = "📡 Radar";
+    btn.setAttribute("aria-disabled", "true");
+    btn.title = "Primary device only";
+    return;
+  }
+
   const now = Date.now();
   const remainingMs = Math.max(0, radarCooldownUntilMs - now);
   const remainingS = Math.ceil(remainingMs / 1000);
-
-  const inCooldown = remainingMs > 0;
-
-  // If you already track primary/viewer, fold that in here:
-  // const canUseRadar = (window.APP_ROLE === "PRIMARY");
-  // btn.disabled = inCooldown || !canUseRadar;
-  btn.disabled = inCooldown;
-  btn.classList.toggle("isCooldown", inCooldown);
-
   const recharging = remainingMs > 0;
 
   btn.disabled = recharging;
@@ -1565,7 +1630,6 @@ function updateRadarBtnState_() {
     btn.textContent = "📡 Radar";
     btn.setAttribute("aria-disabled", "false");
     btn.title = "Radar sweep (PRIMARY only)";
-    // Stop the interval once we’re done
     if (radarCooldownTimer) {
       clearInterval(radarCooldownTimer);
       radarCooldownTimer = null;
@@ -1777,42 +1841,214 @@ async function ensurePlayer() {
   setTopStats();
 }
 
-async function ensureTeam_() {
-  if (teamId && teamRole) return;
+async function ensureTeam_(opts) {
+  opts = opts || {};
+  const forceDialog = !!opts.forceDialog;
 
-  const mode = await modalPrompt_(
-    "Team mode:\n" +
-    "1 = Create a team (PRIMARY)\n" +
-    "2 = Join a team (VIEWER)\n" +
-    "Leave blank for solo mode",
-    "",
-    "Team Mode"
-  );
+  if (teamId && teamRole && !forceDialog) {
+    renderTeamContext_();
+    return;
+  }
 
-  if (!mode) return; // solo mode (legacy)
+  const joinTidFromUrl = getJoinTeamIdFromUrl_();
+  if (joinTidFromUrl && !forceDialog) {
+    const out = await api("joinTeam", { playerId: playerId, teamId: joinTidFromUrl });
+    if (!out.ok) throw new Error(out.error || "Failed to join team.");
+    teamId = out.teamId;
+    teamRole = out.role || "VIEWER";
+    teamName = out.teamName || "";
+    persistTeamContext_();
+    renderTeamContext_();
+    clearJoinParamFromUrl_();
+    return;
+  }
 
-  if (String(mode).trim() === "1") {
+  const buttons = [];
+
+  if (isTeamMode_() && isPrimary_()) {
+    buttons.push({ label: "Show Join QR", value: "show_qr", className: "btn btn--primary" });
+  }
+
+  buttons.push({ label: "Join Team", value: "join", className: "btn" });
+  buttons.push({ label: "Create Team", value: "create", className: "btn" });
+  buttons.push({ label: "Keep Current", value: "cancel", className: "btn" });
+
+  const mode = await showModal_({
+    title: "Team Mode",
+    html:
+      '<div class="teamSetupActions">' +
+        (isTeamMode_()
+          ? '<div class="teamSetupCard">' +
+              '<div class="teamSetupCard__title">Current Team</div>' +
+              '<div class="teamSetupCard__body"><strong>' + escapeHtml_(teamName || "Unnamed Team") + '</strong><br>' +
+              escapeHtml_(roleDisplayLabel_()) + '</div>' +
+            '</div>'
+          : '') +
+        '<div class="teamSetupCard">' +
+          '<div class="teamSetupCard__title">Create Team</div>' +
+          '<div class="teamSetupCard__body">Create a team, become the PRIMARY device, and generate a join QR for nearby teammates.</div>' +
+        '</div>' +
+        '<div class="teamSetupCard">' +
+          '<div class="teamSetupCard__title">Join Team</div>' +
+          '<div class="teamSetupCard__body">Join an existing nearby team as a VIEWER by scanning a QR code or entering a team code.</div>' +
+        '</div>' +
+      '</div>',
+    buttons: buttons,
+    dismissValue: "cancel"
+  });
+
+  if (mode === "cancel" || !mode) {
+    renderTeamContext_();
+    return;
+  }
+
+  if (mode === "show_qr") {
+    if (teamId && isPrimary_()) {
+      await showTeamCreatedModal_(teamId, teamName || "Unnamed Team");
+    }
+    renderTeamContext_();
+    return;
+  }
+
+  if (mode === "create") {
     const rawTeamName = await modalPrompt_("Team name?", teamName || "Team", "Create Team");
     const name = (rawTeamName == null ? "" : String(rawTeamName).trim()) || "Team";
     const out = await api("createTeam", { playerId: playerId, teamName: name });
     if (!out.ok) throw new Error(out.error || "Failed to create team.");
-    teamId = out.teamId; teamRole = out.role || "PRIMARY"; teamName = out.teamName || name;
-  } else if (String(mode).trim() === "2") {
-    const rawTid = await modalPrompt_("Enter teamId to join:", "", "Join Team");
-    const tid = (rawTid == null ? "" : String(rawTid).trim());
-    const out = await api("joinTeam", { playerId: playerId, teamId: tid });
-    if (!out.ok) throw new Error(out.error || "Failed to join team.");
-    teamId = out.teamId; teamRole = out.role || "VIEWER";
-    teamName = teamName || "";
-  } else {
-    return; // treat as solo
+
+    teamId = out.teamId;
+    teamRole = out.role || "PRIMARY";
+    teamName = out.teamName || name;
+
+    persistTeamContext_();
+    renderTeamContext_();
+
+    await showTeamCreatedModal_(teamId, teamName);
+    return;
   }
 
-  localStorage.setItem("eggHunt_teamId", teamId);
-  localStorage.setItem("eggHunt_teamRole", teamRole);
-  localStorage.setItem("eggHunt_teamName", teamName);
-    // After teamId is known, load persisted "last radar played" for THIS team
-  lastRadarIdPlayed = localStorage.getItem(radarPlayedKey_()) || "";
+  if (mode === "join") {
+    const rawTid = await modalPrompt_("Enter team code:", "", "Join Team");
+    const tid = (rawTid == null ? "" : String(rawTid).trim());
+    if (!tid) {
+      renderTeamContext_();
+      return;
+    }
+
+    const out = await api("joinTeam", { playerId: playerId, teamId: tid });
+    if (!out.ok) throw new Error(out.error || "Failed to join team.");
+
+    teamId = out.teamId;
+    teamRole = out.role || "VIEWER";
+    teamName = out.teamName || "";
+
+    persistTeamContext_();
+    renderTeamContext_();
+    return;
+  }
+
+  renderTeamContext_();
+}
+
+async function openTeamModeModal_() {
+  return showModal_({
+    title: "Team Mode",
+    html:
+      '<div class="teamSetupActions">' +
+        '<div class="teamSetupCard">' +
+          '<div class="teamSetupCard__title">Create Team</div>' +
+          '<div class="teamSetupCard__body">Create a team, become the PRIMARY device, and generate a join QR for nearby teammates.</div>' +
+        '</div>' +
+        '<div class="teamSetupCard">' +
+          '<div class="teamSetupCard__title">Join Team</div>' +
+          '<div class="teamSetupCard__body">Join an existing nearby team as a VIEWER by scanning a QR code or entering a team code.</div>' +
+        '</div>' +
+      '</div>',
+    buttons: [
+      { label: "Solo", value: "solo", className: "btn" },
+      { label: "Join Team", value: "join", className: "btn" },
+      { label: "Create Team", value: "create", className: "btn btn--primary" }
+    ],
+    dismissValue: "solo"
+  });
+}
+
+async function showTeamCreatedModal_(tid, name) {
+  const joinUrl = currentJoinUrl_(tid);
+
+  await showModal_({
+    title: "Team Created",
+    html:
+      '<div><strong>' + escapeHtml_(name) + '</strong> is ready.</div>' +
+      '<div class="small" style="margin-top:8px;">Nearby teammates can scan this QR code to join as viewers.</div>' +
+      '<div class="teamQrWrap">' +
+        '<div id="teamJoinQr" class="teamQrCode"></div>' +
+        '<div class="teamJoinMeta">' +
+          '<div class="small">Fallback join code</div>' +
+          '<input class="teamJoinCode mono" readonly value="' + escapeHtml_(tid) + '">' +
+          '<div class="small">Join URL</div>' +
+          '<div class="small teamJoinUrl mono">' + escapeHtml_(joinUrl) + '</div>' +
+        '</div>' +
+      '</div>',
+    buttons: [
+      { label: "Done", value: true, className: "btn btn--primary" }
+    ],
+    dismissValue: true,
+    onRender: function(ctx) {
+      const qrEl = ctx.body.querySelector("#teamJoinQr");
+      if (qrEl && window.QRCode) {
+        qrEl.innerHTML = "";
+        new QRCode(qrEl, {
+          text: joinUrl,
+          width: 180,
+          height: 180
+        });
+      } else if (qrEl) {
+        qrEl.innerHTML = '<div class="small">QR unavailable</div>';
+      }
+    }
+  });
+}
+
+async function openTeamPillModal_() {
+  const isPrimaryDevice = isPrimary_();
+
+  const html =
+    '<div class="teamSetupActions">' +
+      '<div class="teamSetupCard">' +
+        '<div class="teamSetupCard__title">Current Team</div>' +
+        '<div class="teamSetupCard__body">' +
+          '<strong>' + escapeHtml_(teamName || "Unnamed Team") + '</strong><br>' +
+          escapeHtml_(roleDisplayLabel_()) +
+        '</div>' +
+      '</div>' +
+      (teamId
+        ? '<div class="teamSetupCard">' +
+            '<div class="teamSetupCard__title">Team Code</div>' +
+            '<div class="teamSetupCard__body mono">' + escapeHtml_(teamId) + '</div>' +
+          '</div>'
+        : '') +
+    '</div>';
+
+  const buttons = isPrimaryDevice
+    ? [
+        { label: "Close", value: "close", className: "btn" },
+        { label: "Show Join QR", value: "show_qr", className: "btn btn--primary" }
+      ]
+    : [
+        { label: "Close", value: "close", className: "btn btn--primary" }
+      ];
+
+  const result = await showModal_({
+    title: "Team",
+    html: html,
+    buttons: buttons,
+    dismissValue: "close"
+  });
+
+  if (result === "show_qr" && teamId && isPrimaryDevice) {
+    await showTeamCreatedModal_(teamId, teamName || "Unnamed Team");
+  }
 }
 
 // -----------------------------
@@ -1827,18 +2063,24 @@ function startGeolocation() {
   navigator.geolocation.watchPosition(
     function(pos) {
       const c = pos.coords;
-      lastPos = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy };
-      updateYouOnMap(lastPos);
+      lastDevicePos = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy };
 
-      // PRIMARY updates authoritative TeamState
-      if (teamId && isPrimary_()) {
-        api("updateLocation", {
-          playerId: playerId,
-          teamId: teamId,
-          lat: lastPos.lat,
-          lng: lastPos.lng,
-          accuracyM: lastPos.accuracy
-        }).catch(function() {});
+      // Always show the local device marker.
+      updateYouOnMap(lastDevicePos);
+
+      // PRIMARY device remains authoritative for gameplay state.
+      if (!teamId || isPrimary_()) {
+        lastPos = { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy };
+
+        if (teamId && isPrimary_()) {
+          api("updateLocation", {
+            playerId: playerId,
+            teamId: teamId,
+            lat: lastPos.lat,
+            lng: lastPos.lng,
+            accuracyM: lastPos.accuracy
+          }).catch(function() {});
+        }
       }
     },
     function(err) {
@@ -1982,24 +2224,7 @@ function updateRangeRings_(latlng) {
   if (claimCircle) claimCircle.bringToFront();
 }
 
-function playerIcon_(zoom) {
-  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
-  const sz = hunterSizeForZoom_(z);
-  const w = sz.w;
-  const h = sz.h;
 
-  const imgHtml =
-    '<img src="assets/hunter.png" alt="" ' +
-    'style="display:block;width:' + w + 'px;height:' + h + 'px;object-fit:contain;" />';
-
-  return L.divIcon({
-    className: "player-icon",
-    html: imgHtml,
-    iconSize: [w, h],
-    iconAnchor: [Math.round(w / 2), Math.round(h / 2)],
-    popupAnchor: [0, -Math.round(h * 0.45)]
-  });
-}
 
 function updateYouOnMap(p) {
   const latlng = [p.lat, p.lng];
@@ -2042,6 +2267,86 @@ function updateYouOnMap(p) {
       '+/-' + Math.round(p.accuracy) + 'm'
     );
   }
+}
+
+function clearRangeRings_() {
+  if (claimCircle) {
+    map.removeLayer(claimCircle);
+    claimCircle = null;
+  }
+  if (revealCircle) {
+    map.removeLayer(revealCircle);
+    revealCircle = null;
+  }
+}
+
+function playerIcon_(zoom, variant) {
+  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
+  const sz = hunterSizeForZoom_(z);
+  const w = sz.w;
+  const h = sz.h;
+  const v = variant || "primary";
+
+  let asset = "assets/hunter.png";
+  if (v === "viewer" || v === "secondary") {
+    asset = "assets/hunter-secondary.png";
+  }
+
+  const imgHtml =
+    '<img class="player-icon__img" src="' + asset + '" alt="" ' +
+    'style="display:block;width:' + w + 'px;height:' + h + 'px;object-fit:contain;" />';
+
+  return L.divIcon({
+    className: "player-icon player-icon--" + v,
+    html: imgHtml,
+    iconSize: [w, h],
+    iconAnchor: [Math.round(w / 2), Math.round(h / 2)],
+    popupAnchor: [0, -Math.round(h * 0.45)]
+  });
+}
+
+function primaryTeamIcon_(zoom) {
+  const z = (typeof zoom === "number") ? zoom : (map ? map.getZoom() : 16);
+  const sz = hunterSizeForZoom_(z);
+  const w = Math.round(sz.w * 1.08);
+  const h = Math.round(sz.h * 1.08);
+
+  const imgHtml =
+    '<img class="team-primary-icon__img" src="assets/hunter.png" alt="" ' +
+    'style="display:block;width:' + w + 'px;height:' + h + 'px;object-fit:contain;" />';
+
+  return L.divIcon({
+    className: "team-primary-icon",
+    html: imgHtml,
+    iconSize: [w, h],
+    iconAnchor: [Math.round(w / 2), Math.round(h / 2)],
+    popupAnchor: [0, -Math.round(h * 0.45)]
+  });
+}
+
+function updatePrimaryTeamOnMap_(p) {
+  if (!map || !p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
+
+  const latlng = [p.lat, p.lng];
+
+  if (isPrimary_()) {
+    if (primaryMarker) {
+      map.removeLayer(primaryMarker);
+      primaryMarker = null;
+    }
+    updateRangeRings_(latlng);
+    return;
+  }
+
+  if (!primaryMarker) {
+    primaryMarker = L.marker(latlng, {
+      icon: primaryTeamIcon_(map.getZoom())
+    }).addTo(map).bindPopup("Primary device");
+  } else {
+    primaryMarker.setLatLng(latlng);
+  }
+
+  updateRangeRings_(latlng);
 }
 
 // -----------------------------
@@ -2193,14 +2498,23 @@ async function pollTeamState_(options) {
   }
   const st = out.state || {};
   setMessageFeed_(out.messages || []);
-  console.log("[messages payload]", out.messages);
-  if (out.activeMap && Array.isArray(out.activeMap.playBoundary)) {
-    window.EGGHUNT_CONFIG = window.EGGHUNT_CONFIG || {};
-    window.EGGHUNT_CONFIG.PLAY_BOUNDARY = out.activeMap.playBoundary;
+
+  if (out.teamName) {
+    teamName = String(out.teamName || "");
+    localStorage.setItem("eggHunt_teamName", teamName);
   }
+
+  renderTeamContext_();
+
   if (Number.isFinite(st.lastLat) && Number.isFinite(st.lastLng)) {
     lastPos = { lat: st.lastLat, lng: st.lastLng, accuracy: st.lastAccuracyM || 25 };
-    updateYouOnMap(lastPos);
+    updatePrimaryTeamOnMap_(lastPos);
+
+    if (isPrimary_()) {
+      updateYouOnMap(lastPos);
+    } else {
+      refreshEggMarkerDistances_();
+    }
   }
   if (typeof st.score === "number") {
     score = st.score;
@@ -2480,7 +2794,11 @@ function initMap() {
     });
 
     if (youMarker) {
-      youMarker.setIcon(playerIcon_(z));
+      youMarker.setIcon(playerIcon_(z, isViewer_() ? "viewer" : "primary"));
+    }
+
+    if (primaryMarker) {
+      primaryMarker.setIcon(primaryTeamIcon_(z));
     }
   });
 
@@ -2610,7 +2928,46 @@ function waitForMapMoveEnd_(timeoutMs) {
 function wireResetButton_() {
   const btn = $("resetPlayerBtn");
   if (!btn) return;
-  btn.onclick = function() {
+
+  btn.onclick = async function() {
+    const isPrimaryDevice = isPrimary_();
+
+    const modalConfig = isPrimaryDevice
+      ? {
+          title: "Reinitialize Primary Device",
+          html:
+            '<div>This will wipe this device’s field identity.</div>' +
+            '<div class="small" style="margin-top:8px;">' +
+              'This device is the <strong>PRIMARY</strong> for your team.' +
+            '</div>' +
+            '<div class="small" style="margin-top:6px;">' +
+              'If you continue, your team will lose its active position and become non-functional.' +
+            '</div>' +
+            '<div class="small" style="margin-top:6px;">' +
+              'All teammates will need to regroup and create a new team.' +
+            '</div>'
+        }
+      : {
+          title: "Reinitialize Device",
+          html:
+            '<div>This will wipe this device’s field identity.</div>' +
+            '<div class="small" style="margin-top:8px;">' +
+              'You will leave your current team and need to rejoin.' +
+            '</div>'
+        };
+
+    const ok = await showModal_({
+      title: modalConfig.title,
+      html: modalConfig.html,
+      buttons: [
+        { label: "Cancel", value: false, className: "btn" },
+        { label: "Reset", value: true, className: "btn btn--danger" }
+      ],
+      dismissValue: false
+    });
+
+    if (!ok) return;
+
     localStorage.removeItem("eggHunt_playerId");
     localStorage.removeItem("eggHunt_playerName");
     localStorage.removeItem("eggHunt_score");
@@ -2618,6 +2975,7 @@ function wireResetButton_() {
     localStorage.removeItem("eggHunt_teamRole");
     localStorage.removeItem("eggHunt_teamName");
     sessionStorage.removeItem(FIRST_SETUP_RELOAD_KEY_);
+
     location.reload();
   };
 }
@@ -2640,10 +2998,17 @@ function wireRadarButton_() {
   if (!btn) return;
 
   // Only PRIMARY can trigger; VIEWERS can still see replay
-  if (!isTeamMode_() || isViewer_()) {
+  if (!isTeamMode_()) {
     btn.disabled = true;
+    btn.title = "Join or create a team first";
     return;
   }
+
+  if (isViewer_()) {
+    btn.disabled = true;
+    btn.title = "Primary device only";
+    return;
+}
 
   btn.disabled = false;
   btn.onclick = async function() {
@@ -2781,6 +3146,23 @@ function wireLootUseBtn_() {
   };
 }
 
+function wireTeamContextPill_() {
+  const pill = $("teamContextPill");
+  if (!pill) return;
+
+  pill.style.cursor = "pointer";
+  pill.title = "View team details";
+
+  pill.addEventListener("click", async function() {
+    try {
+      if (!isTeamMode_()) return;
+      await openTeamPillModal_();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to open team details.");
+    }
+  });
+}
 // -----------------------------
 // Radar rendering (canvas overlay)
 // -----------------------------
@@ -3078,18 +3460,19 @@ async function boot() {
 
   wireRadarButton_();
   wireLootUseBtn_();
-   try {
-    if (!isViewer_()) {
-      setStartupMessage_("Starting GPS...");
-      startGeolocation();
-    }
+  wireTeamContextPill_();
+  renderTeamContext_();
+
+  try {
+    setStartupMessage_("Starting GPS...");
+    startGeolocation();
 
     if (teamId) {
       setStartupMessage_("Loading equipment and team state...");
       await pollTeamState_();
     }
 
-      if (!isViewer_()) {
+    if (!isViewer_()) {
       setStartupMessage_("Waiting for GPS fix...");
       await waitForInitialGpsFix_(20000);
 
@@ -3126,9 +3509,9 @@ async function boot() {
     startupLoading_ = false;
     hideLoading_();
 
-    if (isViewer_()) {
-      setStatus('<span class="ok">Viewer mode</span> - mirroring team location...');
-    } else if (lastPos) {
+   if (isViewer_()) {
+    setStatus('<span class="ok">Viewer mode</span> - observing PRIMARY device state...');
+  } else if (lastPos) {
       setStatus(
         '<span class="ok">GPS OK</span> - ' +
         'lat <span class="mono">' + lastPos.lat.toFixed(5) + '</span>, ' +

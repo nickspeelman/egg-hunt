@@ -1032,3 +1032,138 @@ button.is-busy,
   height: 50px;
   image-rendering: crisp-edges;
 }
+
+/* =========================
+   Team HUD
+   ========================= */
+
+.teamContext {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.teamContext__label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.teamContext__sep {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.teamContext--primary {
+  border-color: rgba(74, 222, 128, 0.35);
+  box-shadow: 0 8px 24px rgba(74, 222, 128, 0.10);
+}
+
+.teamContext--viewer {
+  border-color: rgba(122, 167, 255, 0.35);
+  box-shadow: 0 8px 24px rgba(122, 167, 255, 0.10);
+}
+
+/* =========================
+   Team setup / QR modal
+   ========================= */
+
+.teamSetupActions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.teamSetupCard {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.teamSetupCard__title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.teamSetupCard__body {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.teamQrWrap {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.teamQrCode {
+  width: 180px;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.teamJoinMeta {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.teamJoinCode {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.teamJoinUrl {
+  word-break: break-all;
+}
+
+/* =========================
+   Map markers
+   ========================= */
+
+.player-icon,
+.team-primary-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.player-icon__img,
+.team-primary-icon__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.player-icon--viewer .player-icon__img {
+  opacity: 0.48;
+  filter: grayscale(0.15);
+}
+
+.player-icon--primary .player-icon__img,
+.team-primary-icon__img {
+  filter:
+    drop-shadow(0 0 2px rgba(255,255,255,0.5))
+    drop-shadow(0 0 10px rgba(74,222,128,0.35));
+}
+
+.btn--danger {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.12);
+}
