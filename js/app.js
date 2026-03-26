@@ -857,7 +857,33 @@ function stripHtml_(html) {
 }
 
 function messagePreviewText_(msg) {
+  const type = String(msg && msg.type || "").toLowerCase();
+  const eventKey = String(msg && msg.eventKey || "").toLowerCase();
+  const title = String(msg && msg.title || "");
   const body = String(msg && msg.body || "").trim();
+
+  const isEggPrime =
+    type === "egg_prime" ||
+    eventKey.indexOf("egg_prime") >= 0 ||
+    /egg\s*(\^?0|prime)/i.test(title) ||
+    /egg\s*(\^?0|prime)/i.test(body);
+
+  if (isEggPrime) {
+    if (isMessageActive_(msg) && Number.isFinite(msg.endTs)) {
+      return "Egg⁰ anomaly active until " + messageClockLabel_(msg.endTs) + ".";
+    }
+
+    if (!isMessageActive_(msg) && !isMessageExpired_(msg) && Number.isFinite(msg.startTs)) {
+      return "Egg⁰ anomaly expected at " + messageClockLabel_(msg.startTs) + ".";
+    }
+
+    if (isMessageExpired_(msg)) {
+      return "Egg⁰ anomaly window has closed.";
+    }
+
+    return "Egg⁰ anomaly detected.";
+  }
+
   if (!body) return "";
   return body.length > 120 ? body.slice(0, 117) + "..." : body;
 }
@@ -1031,10 +1057,10 @@ function buildHeatmapLayer_(overlay) {
 
   return L.heatLayer(points, {
     pane: "messageOverlayPane",
-    radius: Number.isFinite(Number(data.radius)) ? Number(data.radius) : 28,
-    blur: Number.isFinite(Number(data.blur)) ? Number(data.blur) : 20,
+    radius: Number.isFinite(Number(data.radius)) ? Number(data.radius) : 16,
+    blur: Number.isFinite(Number(data.blur)) ? Number(data.blur) : 9,
     maxZoom: Number.isFinite(Number(data.maxZoom)) ? Number(data.maxZoom) : 18,
-    minOpacity: Number.isFinite(Number(data.minOpacity)) ? Number(data.minOpacity) : 0.25
+    minOpacity: Number.isFinite(Number(data.minOpacity)) ? Number(data.minOpacity) : 0.06
   });
 }
 
@@ -1057,7 +1083,7 @@ async function openMessageById_(messageId) {
 
   if (hasHeatmap) {
     buttons.unshift({
-      label: "View Heat Map",
+      label: "View Intel Map",
       value: "view_heatmap",
       className: "btn"
     });
