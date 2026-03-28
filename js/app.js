@@ -815,25 +815,11 @@ function messageStateLabel_(msg) {
 }
 
 function compareMessages_(a, b) {
-  const aActiveUnread = isMessageActive_(a) && !isMessageRead_(a) ? 1 : 0;
-  const bActiveUnread = isMessageActive_(b) && !isMessageRead_(b) ? 1 : 0;
-  if (aActiveUnread !== bActiveUnread) return bActiveUnread - aActiveUnread;
-
-  const aActive = isMessageActive_(a) ? 1 : 0;
-  const bActive = isMessageActive_(b) ? 1 : 0;
-  if (aActive !== bActive) return bActive - aActive;
-
-  const aUnread = !isMessageRead_(a) ? 1 : 0;
-  const bUnread = !isMessageRead_(b) ? 1 : 0;
-  if (aUnread !== bUnread) return bUnread - aUnread;
-
-  if (a.priority !== b.priority) return b.priority - a.priority;
-
   const aStart = Number.isFinite(a.startTs) ? a.startTs : -Infinity;
   const bStart = Number.isFinite(b.startTs) ? b.startTs : -Infinity;
   if (aStart !== bStart) return bStart - aStart;
 
-  return String(a.id).localeCompare(String(b.id));
+  return String(b.id).localeCompare(String(a.id));
 }
 
 function getSortedMessages_() {
