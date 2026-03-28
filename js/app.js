@@ -1067,6 +1067,11 @@ function buildHeatmapLayer_(overlay) {
 
 
 async function openMessageById_(messageId) {
+
+  if (activeMessageOverlayLayers_.length) {
+    clearActiveMessageOverlays_();
+  }
+
   const msg = messageFeed_.find(function(m) { return String(m.id) === String(messageId); });
   if (!msg) return;
 
