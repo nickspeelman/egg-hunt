@@ -504,6 +504,23 @@ h1 {
   transform: translateY(1px);
 }
 
+.egg-popup-status {
+  margin-top: 8px;
+  padding: var(--popupPadY, 8px) var(--popupPadX, 10px);
+  border-radius: var(--popupBtnRadius, 10px);
+  font-size: var(--popupBodySize, 13px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.egg-popup-status--resolved {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+}
+
 /* extracted from inline styles in the original HTML */
 .filterPill {
   display: flex;
@@ -649,6 +666,63 @@ h1 {
   justify-content: flex-end;
   flex-wrap: wrap;
   margin-top: 16px;
+}
+
+.equipmentOfferSummary {
+  display: grid;
+  gap: 6px;
+}
+
+.equipmentOfferSummary__slot {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.equipmentOfferSummary__status {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.equipmentOfferSummary__note {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.equipmentChoiceBtn {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+}
+
+.equipmentChoiceBtn__inner {
+  display: grid;
+  gap: 4px;
+}
+
+.equipmentChoiceBtn__title {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.equipmentChoiceBtn__effect {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.equipmentChoiceBtn__convert {
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 

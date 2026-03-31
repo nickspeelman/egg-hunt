@@ -483,29 +483,35 @@ function showModal_(opts) {
       resolve(value);
     }
 
-  buttons.forEach((b, idx) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = b.className || "btn";
-    btn.textContent = b.label || "OK";
-    btn.disabled = !!b.disabled;
+    buttons.forEach((b, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = b.className || "btn";
 
-    if (!b.disabled) {
-      btn.onclick = function() {
-        if (opts.input) {
-          finish(input.value);
-        } else {
-          finish(b.value);
-        }
-      };
-    }
+      if (b.htmlLabel != null) {
+        btn.innerHTML = b.htmlLabel;
+      } else {
+        btn.textContent = b.label || "OK";
+      }
 
-    actions.appendChild(btn);
+      btn.disabled = !!b.disabled;
 
-    if (idx === buttons.length - 1 && !b.disabled) {
-      setTimeout(() => btn.focus(), 0);
-    }
-  });
+      if (!b.disabled) {
+        btn.onclick = function() {
+          if (opts.input) {
+            finish(input.value);
+          } else {
+            finish(b.value);
+          }
+        };
+      }
+
+      actions.appendChild(btn);
+
+      if (idx === buttons.length - 1 && !b.disabled) {
+        setTimeout(() => btn.focus(), 0);
+      }
+    });
 
     root.querySelectorAll("[data-modal-close]").forEach(el => {
       el.onclick = function() {
@@ -1354,47 +1360,37 @@ function equipmentOfferButtons_(offer) {
   const disabledAttr = !!isViewerDevice;
 
   const cmp = String((offer && offer.comparison) || "").toUpperCase();
+  const item = (offer && offer.item) || {};
+  const equipped = (offer && offer.equipped) || null;
+  const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
+  const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
+
+  const newName = escapeHtml_(item.name || "New equipment");
+  const newBonus = escapeHtml_(formatKitBonus_(item));
+  const currentName = escapeHtml_((equipped && equipped.name) || "Current equipment");
+  const currentBonus = escapeHtml_(equipped ? formatKitBonus_(equipped) : "No equipment");
+
+  function choiceHtml_(topLine, effectLine, convertLine) {
+    return (
+      '<div class="equipmentChoiceBtn__inner">' +
+        '<div class="equipmentChoiceBtn__title">' + topLine + '</div>' +
+        '<div class="equipmentChoiceBtn__effect">' + effectLine + '</div>' +
+        '<div class="equipmentChoiceBtn__convert">' + convertLine + '</div>' +
+      '</div>'
+    );
+  }
 
   if (cmp === "DUPLICATE") {
     return [
       {
+        htmlLabel: choiceHtml_(
+          "Keep " + currentName,
+          currentBonus,
+          "Convert duplicate \u2192 +" + incomingSellValue + " data points"
+        ),
         label: "Keep Current",
         value: "KEEP_CURRENT",
-        className: "btn btn--primary" + disabledClass,
-        disabled: disabledAttr
-      }
-    ];
-  }
-
-  if (cmp === "UPGRADE") {
-    return [
-      {
-        label: "Upgrade",
-        value: "EQUIP_NEW",
-        className: "btn btn--primary" + disabledClass,
-        disabled: disabledAttr
-      },
-      {
-        label: "Keep Current",
-        value: "KEEP_CURRENT",
-        className: "btn" + disabledClass,
-        disabled: disabledAttr
-      }
-    ];
-  }
-
-  if (cmp === "DOWNGRADE") {
-    return [
-      {
-        label: "Downgrade",
-        value: "EQUIP_NEW",
-        className: "btn" + disabledClass,
-        disabled: disabledAttr
-      },
-      {
-        label: "Keep Current",
-        value: "KEEP_CURRENT",
-        className: "btn btn--primary" + disabledClass,
+        className: "btn btn--primary equipmentChoiceBtn" + disabledClass,
         disabled: disabledAttr
       }
     ];
@@ -1402,15 +1398,33 @@ function equipmentOfferButtons_(offer) {
 
   return [
     {
-      label: "Equip new",
+      htmlLabel: choiceHtml_(
+        (cmp === "UPGRADE" ? "Upgrade to " : (cmp === "DOWNGRADE" ? "Downgrade to " : "Equip ")) + newName,
+        newBonus,
+        "Convert current equipment \u2192 +" + equippedSellValue + " data points"
+      ),
+      label: "Equip New",
       value: "EQUIP_NEW",
-      className: "btn btn--primary" + disabledClass,
+      className: (
+        "btn equipmentChoiceBtn" +
+        (cmp === "UPGRADE" ? " btn--primary" : "") +
+        disabledClass
+      ),
       disabled: disabledAttr
     },
     {
+      htmlLabel: choiceHtml_(
+        "Keep " + currentName,
+        currentBonus,
+        "Convert new equipment \u2192 +" + incomingSellValue + " data points"
+      ),
       label: "Keep Current",
       value: "KEEP_CURRENT",
-      className: "btn" + disabledClass,
+      className: (
+        "btn equipmentChoiceBtn" +
+        (cmp === "DOWNGRADE" ? " btn--primary" : "") +
+        disabledClass
+      ),
       disabled: disabledAttr
     }
   ];
@@ -1419,94 +1433,19 @@ function equipmentOfferButtons_(offer) {
 function renderEquipmentOfferHtml_(offer) {
   const meta = equipmentSlotMeta_(offer && offer.slot);
   const cmp = String((offer && offer.comparison) || "").toUpperCase();
-  const item = (offer && offer.item) || {};
-  const equipped = (offer && offer.equipped) || null;
-  const incomingSellValue = Number((offer && offer.incomingSellValue) || 0);
-  const equippedSellValue = Number((offer && offer.equippedSellValue) || 0);
 
-  let baseRule = "Choose which item to equip. The other will be scanned for residual Cadburrion particles and converted into data points. Higher-grade equipment yields stronger particle recovery.";
-
-  let comparisonText = baseRule;
-
-  if (cmp === "UPGRADE") {
-    comparisonText =
-      "The new equipment is better than your current equipment. " +
-      "Upgrading improves field performance, but yields fewer data points immediately. " +
-      baseRule;
-  }
-
-  if (cmp === "DOWNGRADE") {
-    comparisonText =
-      "The new equipment is weaker than your current equipment. " +
-      "Downgrading yields more data points immediately, but means sacrificing field performance. " +
-      baseRule;
-  }
-
-  if (cmp === "DUPLICATE") {
-    comparisonText =
-      "The new equipment is identical to your current equipment. " +
-      "The duplicate will be scanned for residual Cadburrion particles and converted into data points. " +
-      baseRule;
-  }
-
- let noteHtml = "";
-
-  if (cmp === "DUPLICATE") {
-    noteHtml =
-      '<div class="small">' +
-        '<strong>Keep Current:</strong> The duplicate will be scanned for residual Cadburrion particles and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
-      '</div>';
-  } else if (cmp === "UPGRADE") {
-    noteHtml =
-      '<div class="small">' +
-        '<strong>Upgrade:</strong> Upgrade to the new equipment. Your current (weaker) equipment will be scanned for residual Cadburrion particles and converted into <strong>' + equippedSellValue + ' data points</strong>.' +
-        '<br><br>' +
-        '<strong>Keep Current:</strong> Keep your current equipment. The new (stronger) equipment will be scanned and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
-      '</div>';
-  } else if (cmp === "DOWNGRADE") {
-    noteHtml =
-      '<div class="small">' +
-        '<strong>Downgrade:</strong> Downgrade to the new equipment. Your current (stronger) equipment will be scanned for residual Cadburrion particles and converted into <strong>' + equippedSellValue + ' data points</strong>.' +
-        '<br><br>' +
-        '<strong>Keep Current:</strong> Keep your current equipment. The new (weaker) equipment will be scanned and converted into <strong>' + incomingSellValue + ' data points</strong>.' +
-      '</div>';
-  } else {
-    // fallback
-    noteHtml =
-      '<div class="small">' +
-        '<strong>Equip New:</strong> Return your current item for <strong>' + equippedSellValue + ' data points</strong>.' +
-        '<br><br>' +
-        '<strong>Keep Current:</strong> Return the new item for <strong>' + incomingSellValue + ' data points</strong>.' +
-      '</div>';
-  }
+  let statusLabel = "";
+  if (cmp === "UPGRADE") statusLabel = "Better than current equipment";
+  else if (cmp === "DOWNGRADE") statusLabel = "Lower-grade item";
+  else if (cmp === "DUPLICATE") statusLabel = "Duplicate";
+  else statusLabel = "Equipment comparison";
 
   return (
-    '<div style="display:grid;gap:12px;">' +
-      '<div>' +
-        '<div style="font-weight:700;">' + escapeHtml_(meta.label) + '</div>' +
-        '<div class="small">' + escapeHtml_(comparisonText) + '</div>' +
-      '</div>' +
-
-      '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;">' +
-        '<div class="small">New Item</div>' +
-        '<div style="font-weight:700;">' + escapeHtml_(item.name || "Unknown item") + '</div>' +
-        '<div class="small">' + escapeHtml_(formatKitBonus_(item)) + '</div>' +
-      '</div>' +
-
-      (
-        equipped
-          ? (
-              '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;">' +
-                '<div class="small">Currently Equipped</div>' +
-                '<div style="font-weight:700;">' + escapeHtml_(equipped.name || "Unknown item") + '</div>' +
-                '<div class="small">' + escapeHtml_(formatKitBonus_(equipped)) + '</div>' +
-              '</div>'
-            )
-          : ""
-      ) +
-
-      '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:rgba(255,255,255,0.03);">' +
-        noteHtml +
+    '<div class="equipmentOfferSummary">' +
+      '<div class="equipmentOfferSummary__slot">' + escapeHtml_(meta.label) + '</div>' +
+      '<div class="equipmentOfferSummary__status">' + escapeHtml_(statusLabel) + '</div>' +
+      '<div class="equipmentOfferSummary__note">' +
+        'Choose which equipment to keep. The other will be converted into data points.' +
       '</div>' +
     '</div>'
   );
@@ -2517,15 +2456,113 @@ function eggIsInClaimRange_(marker) {
   return eggDistanceMeters_(marker) <= currentClaimMeters_();
 }
 
+function eggResolutionState_(marker) {
+  const resolvedByTeam =
+    !!(
+      marker &&
+      (
+        marker._claimedByTeam ||
+        marker._scannedByTeam
+      )
+    );
+
+  const resolved =
+    resolvedByTeam ||
+    !!(
+      marker &&
+      (
+        marker._resolved ||
+        marker._claimed ||
+        marker._scanned ||
+        marker._isResolved ||
+        marker._isClaimed ||
+        marker._isScanned
+      )
+    );
+
+  if (!resolved) {
+    return {
+      resolved: false,
+      message: ""
+    };
+  }
+
+  return {
+    resolved: true,
+    message: resolvedByTeam ? "Already scanned by your team" : "Already scanned"
+  };
+}
+
+function applyEggResolutionState_(marker, egg) {
+  if (!marker || !egg) return;
+
+  marker._resolved =
+    !!(
+      egg.resolved ||
+      egg.claimed ||
+      egg.scanned ||
+      egg.isResolved ||
+      egg.isClaimed ||
+      egg.isScanned
+    );
+
+  marker._claimed =
+    !!(
+      egg.claimed ||
+      egg.isClaimed
+    );
+
+  marker._scanned =
+    !!(
+      egg.scanned ||
+      egg.isScanned
+    );
+
+  marker._claimedByTeam =
+    !!(
+      egg.claimedByTeam ||
+      egg.scannedByTeam
+    );
+
+  marker._scannedByTeam =
+    !!(
+      egg.scannedByTeam ||
+      egg.claimedByTeam
+    );
+}
+
+function markEggResolvedLocally_(eggId, byTeam) {
+  const marker = eggMarkers.get(eggId);
+  if (!marker) return;
+
+  marker._resolved = true;
+  marker._claimed = true;
+  marker._scanned = true;
+  marker._claimedByTeam = !!byTeam;
+  marker._scannedByTeam = !!byTeam;
+
+  marker.setPopupContent(buildEggPopupHtml_(marker));
+
+  if (marker.isPopupOpen && marker.isPopupOpen()) {
+    applyPopupScale_();
+  }
+}
+
 function buildEggPopupHtml_(marker) {
   const d = eggDistanceMeters_(marker);
   const claimM = currentClaimMeters_();
   const claimMDisplay = formatMetersDisplay_(claimM);
   const inRange = eggIsInClaimRange_(marker);
+  const resolution = eggResolutionState_(marker);
 
   let claimUi = "";
 
-  if (teamId && isViewer_()) {
+  if (resolution.resolved) {
+    claimUi =
+      '<div class="egg-popup-status egg-popup-status--resolved">' +
+        escapeHtml_(resolution.message || "Already scanned") +
+      '</div>';
+  } else if (teamId && isViewer_()) {
     claimUi = '<div class="small"><span class="bad">Primary device required</span></div>';
   } else if (inRange) {
     claimUi = '<button id="claim_' + marker._eggId + '" class="claim-btn">Scan</button>';
@@ -2548,6 +2585,7 @@ function buildEggPopupHtml_(marker) {
     claimUi
   );
 }
+
 function refreshEggMarkerDistances_() {
   if (!map || !lastPos) return;
 
@@ -2563,11 +2601,14 @@ function refreshEggMarkerDistances_() {
 
 function bindClaimButton_(marker) {
   if (!marker || (teamId && isViewer_())) return;
+  if (eggResolutionState_(marker).resolved) return;
 
   const btn = document.getElementById("claim_" + marker._eggId);
   if (!btn) return;
 
   btn.onclick = async function() {
+    if (eggResolutionState_(marker).resolved) return;
+
     await runWithLoading_(
       {
         button: btn,
@@ -2587,7 +2628,26 @@ function bindClaimButton_(marker) {
 
 
 function upsertEggMarker(egg) {
-  if (eggMarkers.has(egg.eggId)) return;
+  const existing = eggMarkers.get(egg.eggId);
+  if (existing) {
+    existing._eggLat = Number(egg.lat);
+    existing._eggLng = Number(egg.lng);
+    existing._eggColor = egg.color;
+    existing._eggPattern = egg.pattern;
+    existing._eggDistanceMeters = Number(egg.distanceMeters || 0);
+    existing._specialType = egg.specialType || "";
+    existing._title = egg.title || "";
+    existing._iconUrl = egg.iconUrl || "";
+
+    applyEggResolutionState_(existing, egg);
+    existing.setPopupContent(buildEggPopupHtml_(existing));
+
+    if (existing.isPopupOpen && existing.isPopupOpen()) {
+      bindClaimButton_(existing);
+      applyPopupScale_();
+    }
+    return;
+  }
 
   const isPrime = String(egg && egg.specialType || "").toUpperCase() === "EGG_PRIME";
 
@@ -2616,6 +2676,8 @@ function upsertEggMarker(egg) {
   m._specialType = egg.specialType || "";
   m._title = egg.title || "";
   m._iconUrl = egg.iconUrl || "";
+
+  applyEggResolutionState_(m, egg);
 
   m.bindPopup(buildEggPopupHtml_(m));
 
@@ -2811,9 +2873,10 @@ async function claimEgg(eggId) {
       return;
     }
 
-    // Server says it's already claimed
+      // Server says it's already claimed
     if (out.alreadyClaimed) {
-      await modalAlert_("You already scanned this egg.", "Scan Egg");
+      markEggResolvedLocally_(eggId, true);
+      await modalAlert_("Already scanned by your team.", "Scan Egg");
       return;
     }
 
@@ -2858,7 +2921,7 @@ async function claimEgg(eggId) {
         const item = out.loot.item;
         lootMsg = "\nEquipment Deployment: " + (item.name || item.lootId || "Loot");
       } else {
-        lootMsg = "\nEquipment Deployment!";
+        lootMsg = "\nHQ is transmitting new equipment through the peepochron substrate. Resolving details...";
       }
     }
 
