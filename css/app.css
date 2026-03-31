@@ -687,6 +687,14 @@ h1 {
   margin-bottom: 10px;
 }
 
+.loadingSubtext {
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.78);
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
 .loadingBar {
   position: relative;
   height: 8px;

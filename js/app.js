@@ -218,7 +218,22 @@ function eggPrimeIcon_(iconUrl, zoom) {
 function showLoading_(message) {
   const overlay = document.getElementById("loadingOverlay");
   const text = document.getElementById("loadingText");
-  if (text) text.textContent = message || "Working…";
+  const subtext = document.getElementById("loadingSubtext");
+
+  const payload = (message && typeof message === "object")
+    ? message
+    : { text: message || "Working…", subtext: "" };
+
+  if (text) {
+    text.textContent = payload.text || "Working…";
+  }
+
+  if (subtext) {
+    const secondary = String(payload.subtext || "").trim();
+    subtext.textContent = secondary;
+    subtext.classList.toggle("hidden", !secondary);
+  }
+
   if (overlay) {
     overlay.classList.remove("hidden");
     overlay.setAttribute("aria-hidden", "false");
@@ -227,6 +242,15 @@ function showLoading_(message) {
 
 function hideLoading_() {
   const overlay = document.getElementById("loadingOverlay");
+  const text = document.getElementById("loadingText");
+  const subtext = document.getElementById("loadingSubtext");
+
+  if (text) text.textContent = "Working…";
+  if (subtext) {
+    subtext.textContent = "";
+    subtext.classList.add("hidden");
+  }
+
   if (overlay) {
     overlay.classList.add("hidden");
     overlay.setAttribute("aria-hidden", "true");
@@ -1886,7 +1910,18 @@ async function maybeHandleEquipmentOffer_(offer) {
       return;
     }
 
-    const out = await respondEquipmentOffer_(offerId, decision);
+        const out = await runWithLoading_(
+      {
+       loadingText: {
+          text: "Peepochron tunneling in process…",
+          subtext: "Routing equipment through substrate layers."
+        },
+        delayMs: 150
+      },
+      async function() {
+        return await respondEquipmentOffer_(offerId, decision);
+      }
+    );
 
     if (!out || !out.ok) {
       await modalAlert_((out && out.error) || "Equipment offer response failed.", "Egg Hunter Kit");
@@ -2536,6 +2571,11 @@ function bindClaimButton_(marker) {
     await runWithLoading_(
       {
         button: btn,
+        buttonText: "Scan in progress…",
+        loadingText: {
+          text: "Scan in progress…",
+          subtext: "Sample stabilizing. You may continue moving."
+        },
         delayMs: 150
       },
       async function() {
@@ -2832,10 +2872,30 @@ async function claimEgg(eggId) {
     });
 
     if (teamId) {
-      const st = await pollTeamState_({
-        skipLootOffer: true,
-        skipEquipmentOffer: true
-      });
+      const hasEquipmentOfferFollowup =
+        !!out.loot &&
+        String(out.loot.kind || "").toUpperCase() === "OFFER";
+
+      const st = hasEquipmentOfferFollowup
+        ? await runWithLoading_(
+            {
+           loadingText: {
+              text: "Recalibrating scanner…",
+              subtext: "Re-tuning signal alignment after scan."
+            },
+              delayMs: 150
+            },
+            async function() {
+              return await pollTeamState_({
+                skipLootOffer: true,
+                skipEquipmentOffer: true
+              });
+            }
+          )
+        : await pollTeamState_({
+            skipLootOffer: true,
+            skipEquipmentOffer: true
+          });
 
       if (st && st.pendingLootOffer) {
         await maybeHandleEquipmentOffer_(st.pendingLootOffer);
