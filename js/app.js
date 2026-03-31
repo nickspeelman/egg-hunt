@@ -463,6 +463,23 @@ function showModal_(opts) {
       return;
     }
 
+    let finished = false;
+
+    function disableModalActions_() {
+      actions.querySelectorAll("button").forEach(function(btn) {
+        btn.disabled = true;
+        btn.classList.add("is-busy");
+      });
+    }
+
+    function finish(value) {
+      if (finished) return;
+      finished = true;
+      modalCleanup_();
+      modalSetVisible_(false);
+      resolve(value);
+    }
+
     title.textContent = opts.title || "Message";
     body.innerHTML = opts.html != null
       ? opts.html
@@ -476,12 +493,6 @@ function showModal_(opts) {
     const buttons = Array.isArray(opts.buttons) && opts.buttons.length
       ? opts.buttons
       : [{ label: "OK", value: true, className: "btn btn--primary" }];
-
-    function finish(value) {
-      modalCleanup_();
-      modalSetVisible_(false);
-      resolve(value);
-    }
 
     buttons.forEach((b, idx) => {
       const btn = document.createElement("button");
@@ -498,6 +509,9 @@ function showModal_(opts) {
 
       if (!b.disabled) {
         btn.onclick = function() {
+          if (finished || btn.disabled) return;
+          disableModalActions_();
+
           if (opts.input) {
             finish(input.value);
           } else {
@@ -515,6 +529,7 @@ function showModal_(opts) {
 
     root.querySelectorAll("[data-modal-close]").forEach(el => {
       el.onclick = function() {
+        if (finished) return;
         if (opts.dismissValue !== undefined) {
           finish(opts.dismissValue);
         }
@@ -522,6 +537,8 @@ function showModal_(opts) {
     });
 
     document.onkeydown = function(e) {
+      if (finished) return;
+
       if (e.key === "Escape" && opts.dismissValue !== undefined) {
         finish(opts.dismissValue);
         return;
@@ -529,12 +546,13 @@ function showModal_(opts) {
 
       if (opts.input && e.key === "Enter") {
         e.preventDefault();
+        disableModalActions_();
         finish(input.value);
       }
     };
 
     modalSetVisible_(true);
-    
+
     if (typeof opts.onRender === "function") {
       opts.onRender({
         root: root,
@@ -628,6 +646,10 @@ function formatGameTimeRemaining(ms) {
 
 function currentServerNowMs_() {
   return Date.now() + serverClockOffsetMs;
+}
+
+function gameIsOver_() {
+  return Number.isFinite(gameEndMs) && currentServerNowMs_() >= gameEndMs;
 }
 
 function renderGameClock_() {
@@ -1675,6 +1697,57 @@ let pauseTeamStatePolling_ = false;
 let activeEquipmentOfferId_ = "";
 let activeEquipmentOfferDismiss_ = null;
 
+let scanRequestInFlight_ = false;
+let teamStatePollInFlight_ = false;
+let nearbyEggsPollInFlight_ = false;
+let quietPeriodUntilMs_ = 0;
+
+function beginQuietPeriod_(ms) {
+  const dur = Math.max(0, Number(ms || 0));
+  if (!dur) return;
+  quietPeriodUntilMs_ = Math.max(quietPeriodUntilMs_, Date.now() + dur);
+}
+
+function isQuietPeriodActive_() {
+  return Date.now() < quietPeriodUntilMs_;
+}
+
+function shouldSuppressBackgroundPolling_() {
+  return (
+    pauseTeamStatePolling_ ||
+    lootFlowActive_ ||
+    equipmentOfferFlowActive_ ||
+    radarRequestInFlight ||
+    scanRequestInFlight_ ||
+    isQuietPeriodActive_()
+  );
+}
+
+function userFacingBusyMessage_(errOrMessage, fallback) {
+  const raw = String(
+    (errOrMessage && (errOrMessage.message || errOrMessage.error)) ||
+    errOrMessage ||
+    ""
+  ).toLowerCase();
+
+  if (
+    raw.includes("busy") ||
+    raw.includes("overloaded") ||
+    raw.includes("too many") ||
+    raw.includes("try again") ||
+    raw.includes("timeout") ||
+    raw.includes("timed out") ||
+    raw.includes("invocation") ||
+    raw.includes("service invoked") ||
+    raw.includes("lock") ||
+    raw.includes("temporarily unavailable")
+  ) {
+    return "Field link busy. Try again in a moment.";
+  }
+
+  return fallback || "System traffic is high. Please retry.";
+}
+
 function fmtMs_(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
@@ -1849,9 +1922,11 @@ async function maybeHandleEquipmentOffer_(offer) {
       return;
     }
 
-        const out = await runWithLoading_(
+    beginQuietPeriod_(2500);
+
+    const out = await runWithLoading_(
       {
-       loadingText: {
+        loadingText: {
           text: "Peepochron tunneling in process…",
           subtext: "Routing equipment through substrate layers."
         },
@@ -1863,7 +1938,10 @@ async function maybeHandleEquipmentOffer_(offer) {
     );
 
     if (!out || !out.ok) {
-      await modalAlert_((out && out.error) || "Equipment offer response failed.", "Egg Hunter Kit");
+      await modalAlert_(
+        userFacingBusyMessage_(out && out.error, "Equipment offer response failed."),
+        "Egg Hunter Kit"
+      );
       return;
     }
 
@@ -1873,11 +1951,15 @@ async function maybeHandleEquipmentOffer_(offer) {
 
     await pollTeamState_({
       skipLootOffer: true,
-      skipEquipmentOffer: true
+      skipEquipmentOffer: true,
+      force: true
     });
   } catch (err) {
     console.error("[equipmentOffer] modal failed:", err);
-    throw err;
+    await modalAlert_(
+      userFacingBusyMessage_(err, "Equipment offer response failed."),
+      "Egg Hunter Kit"
+    );
   } finally {
     activeEquipmentOfferDismiss_ = null;
     activeEquipmentOfferId_ = "";
@@ -2562,6 +2644,11 @@ function buildEggPopupHtml_(marker) {
       '<div class="egg-popup-status egg-popup-status--resolved">' +
         escapeHtml_(resolution.message || "Already scanned") +
       '</div>';
+  } else if (gameIsOver_()) {
+    claimUi =
+      '<div class="egg-popup-status egg-popup-status--resolved">' +
+        'Game over' +
+      '</div>';
   } else if (teamId && isViewer_()) {
     claimUi = '<div class="small"><span class="bad">Primary device required</span></div>';
   } else if (inRange) {
@@ -2602,6 +2689,7 @@ function refreshEggMarkerDistances_() {
 function bindClaimButton_(marker) {
   if (!marker || (teamId && isViewer_())) return;
   if (eggResolutionState_(marker).resolved) return;
+  if (gameIsOver_()) return;
 
   const btn = document.getElementById("claim_" + marker._eggId);
   if (!btn) return;
@@ -2700,146 +2788,179 @@ function clearEggMarkers() {
 async function pollTeamState_(options) {
   options = options || {};
   if (!teamId) return null;
-  const out = await api("teamState", { playerId: playerId, teamId: teamId });
-  applyGameTiming_(out);
-  if (!out.ok) {
-    setStatus('<span class="bad">Field Link Unstable:</span> ' + (out.error || "teamState failed"));
-    return null;
-  }
-  const st = out.state || {};
-  setMessageFeed_(out.messages || []);
 
-  if (out.teamName) {
-    teamName = String(out.teamName || "");
-    localStorage.setItem("eggHunt_teamName", teamName);
+  if (!options.force && shouldSuppressBackgroundPolling_()) {
+    return lastTeamState_;
   }
 
-  renderTeamContext_();
+  if (teamStatePollInFlight_) {
+    return lastTeamState_;
+  }
 
-  if (Number.isFinite(st.lastLat) && Number.isFinite(st.lastLng)) {
-    lastPos = { lat: st.lastLat, lng: st.lastLng, accuracy: st.lastAccuracyM || 25 };
-    updatePrimaryTeamOnMap_(lastPos);
+  teamStatePollInFlight_ = true;
 
-    if (isPrimary_()) {
-      updateYouOnMap(lastPos);
-    } else {
-      refreshEggMarkerDistances_();
+  try {
+    const out = await api("teamState", { playerId: playerId, teamId: teamId });
+    applyGameTiming_(out);
+
+    if (!out.ok) {
+      setStatus(
+        '<span class="bad">Field Link Unstable:</span> ' +
+        userFacingBusyMessage_(out && out.error, "System traffic is high. Please retry.")
+      );
+      return lastTeamState_;
     }
+
+    const st = out.state || {};
+    setMessageFeed_(out.messages || []);
+
+    if (out.teamName) {
+      teamName = String(out.teamName || "");
+      localStorage.setItem("eggHunt_teamName", teamName);
+    }
+
+    renderTeamContext_();
+
+    if (Number.isFinite(st.lastLat) && Number.isFinite(st.lastLng)) {
+      lastPos = { lat: st.lastLat, lng: st.lastLng, accuracy: st.lastAccuracyM || 25 };
+      updatePrimaryTeamOnMap_(lastPos);
+
+      if (isPrimary_()) {
+        updateYouOnMap(lastPos);
+      } else {
+        refreshEggMarkerDistances_();
+      }
+    }
+
+    if (typeof st.score === "number") {
+      score = st.score;
+      localStorage.setItem("eggHunt_score", String(score));
+      setTopStats();
+    }
+
+    if (st && st.radarMeta && Number.isFinite(st.radarMeta.cooldownRemainingMs)) {
+      const rem = Number(st.radarMeta.cooldownRemainingMs || 0);
+      if (rem > 0) startRadarCooldown_(rem);
+    }
+
+    if (st && st.radar && st.radar.radarId) {
+      requestRadarPlayback_(st.radar);
+    }
+
+    lastTeamState_ = st;
+    renderLootHud_(st);
+    renderKitFromState_(st.equipment || {});
+
+    const pendingEquipmentOffer = st.pendingLootOffer || null;
+
+    if (!pendingEquipmentOffer || !pendingEquipmentOffer.offerId) {
+      dismissActiveEquipmentOffer_();
+    } else if (
+      activeEquipmentOfferId_ &&
+      String(activeEquipmentOfferId_) !== String(pendingEquipmentOffer.offerId)
+    ) {
+      dismissActiveEquipmentOffer_(activeEquipmentOfferId_);
+    }
+
+    if (!options.skipLootOffer) {
+      maybeHandleLootOffer_(st).catch(function() {});
+    }
+
+    if (!options.skipEquipmentOffer) {
+      maybeHandleEquipmentOffer_(pendingEquipmentOffer).catch(function() {});
+    }
+
+    return st;
+  } finally {
+    teamStatePollInFlight_ = false;
   }
-  if (typeof st.score === "number") {
-    score = st.score;
-    localStorage.setItem("eggHunt_score", String(score));
-    setTopStats();
-  }
-
-  // Restore cooldown from server (so refresh doesn't reset)
-  if (st && st.radarMeta && Number.isFinite(st.radarMeta.cooldownRemainingMs)) {
-    const rem = Number(st.radarMeta.cooldownRemainingMs || 0);
-    if (rem > 0) startRadarCooldown_(rem);
-  }
-
-  // Replay latest RADAR only once per radarId
-  if (st && st.radar && st.radar.radarId) {
-    requestRadarPlayback_(st.radar);
-  }
-
-  lastTeamState_ = st;
-  renderLootHud_(st);
-  renderKitFromState_(st.equipment || {});
-
-  console.log("[teamState] pendingLootOffer top-level:", out.pendingLootOffer);
-  console.log("[teamState] pendingLootOffer in state:", st.pendingLootOffer);
-  console.log("[teamState] full out:", out);
-
-  if (!options.skipLootOffer) {
-    maybeHandleLootOffer_(st).catch(function(){});
-  }
-
-  const pendingEquipmentOffer = st.pendingLootOffer || null;
-
-  if (!pendingEquipmentOffer || !pendingEquipmentOffer.offerId) {
-    dismissActiveEquipmentOffer_();
-  } else if (
-    activeEquipmentOfferId_ &&
-    String(activeEquipmentOfferId_) !== String(pendingEquipmentOffer.offerId)
-  ) {
-    dismissActiveEquipmentOffer_(activeEquipmentOfferId_);
-  }
-
-  if (!options.skipEquipmentOffer) {
-    maybeHandleEquipmentOffer_(pendingEquipmentOffer).catch(function(){});
-  }
-
-  return st;
 }
 
-async function pollNearbyEggs() {
+async function pollNearbyEggs(options) {
+  options = options || {};
   if (!lastPos || !playerId) return;
 
-  const out = await api("game_nearbyEggs", {
-    playerId: playerId,
-    teamId: teamId,
-    lat: lastPos ? lastPos.lat : "",
-    lng: lastPos ? lastPos.lng : ""
-  });
-  applyGameTiming_(out);
-
-  console.log("[nearbyEggs] keys:", Object.keys(out || {}));
-  console.log("[nearbyEggs] claim candidates:", {
-    claimMeters: out?.claimMeters,
-    claimRadiusM: out?.claimRadiusM,
-    debugClaim: out?.debug?.claim,
-    debugClaimMeters: out?.debug?.claimMeters,
-    cfgClaimMeters: out?.cfg?.claimMeters,
-    cfgClaimRadiusM: out?.cfg?.claimRadiusM
-  });
-
-  if (!out.ok) {
-    setStatus('<span class="bad">Field Link Unstable:</span> ' + (out.error || "unknown"));
+  if (!options.force && shouldSuppressBackgroundPolling_()) {
     return;
   }
 
-  if (out.state && out.state !== "LIVE") {
-    clearEggMarkers();
-    setStatus('<span class="bad">Game state:</span> ' + out.state);
+  if (nearbyEggsPollInFlight_) {
     return;
   }
 
-    // Capture reveal radius if the backend includes it (support a few common shapes)
-  const revealFromOut =
-    (out && (out.revealMeters ?? out.revealRadiusM)) ??
-    (out && out.debug && (out.debug.reveal ?? out.debug.revealMeters ?? out.debug.revealRadiusM));
+  nearbyEggsPollInFlight_ = true;
+
+  try {
+    const out = await api("game_nearbyEggs", {
+      playerId: playerId,
+      teamId: teamId,
+      lat: lastPos ? lastPos.lat : "",
+      lng: lastPos ? lastPos.lng : ""
+    });
+
+    applyGameTiming_(out);
+
+    if (!out.ok) {
+      setStatus(
+        '<span class="bad">Field Link Unstable:</span> ' +
+        userFacingBusyMessage_(out && out.error, "System traffic is high. Please retry.")
+      );
+      return;
+    }
+
+    if (out.state && out.state !== "LIVE") {
+      clearEggMarkers();
+      setStatus('<span class="bad">Game state:</span> ' + out.state);
+      return;
+    }
+
+    const revealFromOut =
+      (out && (out.revealMeters ?? out.revealRadiusM)) ??
+      (out && out.debug && (out.debug.reveal ?? out.debug.revealMeters ?? out.debug.revealRadiusM));
 
     const revealNum = Number(revealFromOut);
     if (Number.isFinite(revealNum) && revealNum > 0) {
       lastRevealMeters = revealNum;
     }
 
-  // If you ever include claim radius in nearbyEggs responses, we'll pick it up too
-  const claimFromOut =
-    (out && (out.claimMeters ?? out.claimRadiusM)) ??
-    (out && out.debug && (out.debug.claim ?? out.debug.claimMeters ?? out.debug.claimRadiusM));
+    const claimFromOut =
+      (out && (out.claimMeters ?? out.claimRadiusM)) ??
+      (out && out.debug && (out.debug.claim ?? out.debug.claimMeters ?? out.debug.claimRadiusM));
 
     const claimNum = Number(claimFromOut);
     if (Number.isFinite(claimNum) && claimNum > 0) {
       lastClaimMeters = claimNum;
     }
-  // If we already have a position, refresh rings immediately
-  if (lastPos) updateRangeRings_([lastPos.lat, lastPos.lng]);
 
-  (out.eggs || []).forEach(upsertEggMarker);
+    if (lastPos) updateRangeRings_([lastPos.lat, lastPos.lng]);
+
+    (out.eggs || []).forEach(upsertEggMarker);
+  } finally {
+    nearbyEggsPollInFlight_ = false;
+  }
 }
 
 async function claimEgg(eggId) {
   if (!lastPos || !playerId) return;
+
+  if (gameIsOver_()) {
+    await modalAlert_("Game over. Scanning has ended.", "Scan Egg");
+    return;
+  }
 
   if (teamId && !isPrimary_()) {
     await modalAlert_("Primary device required.", "Scan Egg");
     return;
   }
 
+  if (scanRequestInFlight_) {
+    return;
+  }
+
   const prevPause = pauseTeamStatePolling_;
   pauseTeamStatePolling_ = true;
+  scanRequestInFlight_ = true;
+  beginQuietPeriod_(2500);
 
   try {
     const out = await api("game_claimEgg", {
@@ -2850,13 +2971,11 @@ async function claimEgg(eggId) {
       lng: lastPos.lng
     });
 
-    // If backend tells us the claim radius, store it and refresh the ring immediately.
     if (out && Number.isFinite(Number(out.claimMeters))) {
       lastClaimMeters = Number(out.claimMeters);
       updateRangeRings_([lastPos.lat, lastPos.lng]);
     }
 
-    // Handle errors
     if (!out || !out.ok) {
       if (out && out.tooFar) {
         await modalAlert_(
@@ -2869,18 +2988,20 @@ async function claimEgg(eggId) {
         );
         return;
       }
-      await modalAlert_((out && out.error) || "Scan failed.", "Scan Egg");
+
+      await modalAlert_(
+        userFacingBusyMessage_(out && out.error, "Scan failed."),
+        "Scan Egg"
+      );
       return;
     }
 
-      // Server says it's already claimed
     if (out.alreadyClaimed) {
       markEggResolvedLocally_(eggId, true);
       await modalAlert_("Already scanned by your team.", "Scan Egg");
       return;
     }
 
-    // Update score
     if (typeof out.teamScore === "number") {
       score = out.teamScore;
     } else {
@@ -2889,14 +3010,12 @@ async function claimEgg(eggId) {
     localStorage.setItem("eggHunt_score", String(score));
     setTopStats();
 
-    // Remove marker from map
     const m = eggMarkers.get(eggId);
     if (m) map.removeLayer(m);
     eggMarkers.delete(eggId);
     setTopStats();
 
-    // Success message
-     const label =
+    const label =
       String(out.specialType || "").toUpperCase() === "EGG_PRIME"
         ? String(out.title || "Egg Prime")
         : (out.color && out.pattern
@@ -2942,35 +3061,40 @@ async function claimEgg(eggId) {
       const st = hasEquipmentOfferFollowup
         ? await runWithLoading_(
             {
-           loadingText: {
-              text: "Recalibrating scanner…",
-              subtext: "Re-tuning signal alignment after scan."
-            },
+              loadingText: {
+                text: "Recalibrating scanner…",
+                subtext: "Re-tuning signal alignment after scan."
+              },
               delayMs: 150
             },
             async function() {
               return await pollTeamState_({
                 skipLootOffer: true,
-                skipEquipmentOffer: true
+                skipEquipmentOffer: true,
+                force: true
               });
             }
           )
         : await pollTeamState_({
             skipLootOffer: true,
-            skipEquipmentOffer: true
+            skipEquipmentOffer: true,
+            force: true
           });
 
       if (st && st.pendingLootOffer) {
         await maybeHandleEquipmentOffer_(st.pendingLootOffer);
       }
     }
-  } 
-  
-  finally {
+  } catch (err) {
+    await modalAlert_(
+      userFacingBusyMessage_(err, "Scan failed."),
+      "Scan Egg"
+    );
+  } finally {
+    scanRequestInFlight_ = false;
     pauseTeamStatePolling_ = prevPause;
   }
 }
-
 function popupMetricsForZoom_(z) {
   const effectiveZoom = Math.min(z, 19);
 
@@ -3239,7 +3363,6 @@ function wireRadarButton_() {
   const btn = $("radarBtn");
   if (!btn) return;
 
-  // Only PRIMARY can trigger; VIEWERS can still see replay
   if (!isTeamMode_()) {
     btn.disabled = true;
     btn.title = "Join or create a team first";
@@ -3250,7 +3373,7 @@ function wireRadarButton_() {
     btn.disabled = true;
     btn.title = "Primary device only";
     return;
-}
+  }
 
   btn.disabled = false;
   btn.onclick = async function() {
@@ -3260,6 +3383,7 @@ function wireRadarButton_() {
 
     radarRequestInFlight = true;
     btn.disabled = true;
+    beginQuietPeriod_(2500);
 
     try {
       await runWithLoading_(
@@ -3274,18 +3398,25 @@ function wireRadarButton_() {
             if (res && Number.isFinite(res.cooldownRemainingMs)) {
               startRadarCooldown_(res.cooldownRemainingMs);
             }
-            await modalAlert_((res && res.error) || "Radar failed.", "Radar");
+            await modalAlert_(
+              userFacingBusyMessage_(res && res.error, "Radar failed."),
+              "Radar"
+            );
             return;
           }
 
           if (Number.isFinite(res.cooldownMs)) {
             startRadarCooldown_(res.cooldownMs);
           }
+
           requestRadarPlayback_(res);
         }
       );
     } catch (e) {
-      await modalAlert_(String(e && (e.message || e)), "Radar");
+      await modalAlert_(
+        userFacingBusyMessage_(e, "Radar failed."),
+        "Radar"
+      );
     } finally {
       radarRequestInFlight = false;
       updateRadarBtnState_();
@@ -3356,10 +3487,13 @@ function wireLootUseBtn_() {
             slotIndex: idx
           });
 
-          if (!out || !out.ok) {
-            await modalAlert_((out && out.error) || "Failed to activate loot.", "Use Loot");
-            return;
-          }
+        if (!out || !out.ok) {
+          await modalAlert_(
+            userFacingBusyMessage_(out && out.error, "Failed to activate loot."),
+            "Use Loot"
+          );
+          return;
+}
 
           // Reflect mutation response immediately.
           const hudState = {
@@ -3379,9 +3513,12 @@ function wireLootUseBtn_() {
           await pollTeamState_({ skipLootOffer: true });
         }
       );
-    } catch (e) {
-      await modalAlert_(String(e && (e.message || e)), "Use Loot");
-    } finally {
+      } catch (e) {
+        await modalAlert_(
+          userFacingBusyMessage_(e, "Failed to activate loot."),
+          "Use Loot"
+        );
+      } finally {
       pauseTeamStatePolling_ = false;
       lootFlowActive_ = false;
     }
