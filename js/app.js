@@ -2023,7 +2023,6 @@ async function ensureTeam_(opts) {
 
   buttons.push({ label: "Join Team", value: "join", className: "btn" });
   buttons.push({ label: "Create Team", value: "create", className: "btn" });
-  buttons.push({ label: "Keep Current", value: "cancel", className: "btn" });
 
   const mode = await showModal_({
     title: "Team Mode",
