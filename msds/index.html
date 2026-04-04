@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EGG-LABS Specimen Report</title>
+
+  <style>
+    :root {
+      --bg: #e9edf1;
+      --paper: #fcfdff;
+      --ink: #14202b;
+      --muted: #526170;
+      --line: #bcc7d1;
+      --accent: #29465f;
+      --gold: #9a6a00;
+      --silver: #5f6c78;
+      --bronze: #7b4b2a;
+      --danger: #8a2d2d;
+      --ok: #2b5b3a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0)),
+        var(--bg);
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      line-height: 1.5;
+      padding: 24px 14px 40px;
+    }
+
+    .page {
+      max-width: 880px;
+      margin: 0 auto;
+    }
+
+    .report {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow:
+        0 20px 40px rgba(20, 32, 43, 0.10),
+        0 4px 10px rgba(20, 32, 43, 0.06);
+      overflow: hidden;
+    }
+
+    .report-header {
+      padding: 22px 22px 16px;
+      border-bottom: 2px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(41,70,95,0.05), rgba(41,70,95,0.01));
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .statusbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(41,70,95,0.03);
+      font-size: 13px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.85);
+      white-space: nowrap;
+    }
+
+    .content {
+      padding: 18px 22px 24px;
+    }
+
+    .section {
+      padding: 14px 0 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: minmax(160px, 220px) 1fr;
+      gap: 8px 14px;
+      font-size: 14px;
+    }
+
+    .kv dt {
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .kv dd {
+      margin: 0;
+    }
+
+    .grade {
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .grade.gold { color: var(--gold); }
+    .grade.silver { color: var(--silver); }
+    .grade.bronze { color: var(--bronze); }
+
+    .agents {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .agents li {
+      margin: 4px 0;
+    }
+
+    .note-block {
+      white-space: pre-line;
+      font-size: 14px;
+    }
+
+    .registry-box,
+    .advisory-box,
+    .error-box,
+    .loading-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: rgba(41,70,95,0.03);
+      font-size: 14px;
+    }
+
+    .advisory-box {
+      border-color: rgba(154,106,0,0.35);
+      background: rgba(154,106,0,0.05);
+    }
+
+    .error-box {
+      border-color: rgba(138,45,45,0.30);
+      background: rgba(138,45,45,0.06);
+      color: var(--danger);
+    }
+
+    .loading-box {
+      color: var(--muted);
+    }
+
+    .footer {
+      padding: 0 22px 22px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: 22px;
+      }
+
+      .kv {
+        grid-template-columns: 1fr;
+      }
+
+      .report-header,
+      .statusbar,
+      .content,
+      .footer {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="report">
+      <div class="report-header">
+        <div class="eyebrow">EGG-LABS Specimen Registry</div>
+        <h1>🧪 EGG-LABS Specimen Report</h1>
+        <div class="subtitle">Cadburrion Field Extraction Record</div>
+      </div>
+
+      <div class="statusbar">
+        <div class="pill">Sample: <strong id="statusSample">—</strong></div>
+        <div class="pill">Placement: <strong id="statusPlacement">—</strong></div>
+        <div class="pill">Score: <strong id="statusScore">—</strong></div>
+      </div>
+
+      <div class="content" id="content">
+        <div class="loading-box">Loading specimen record...</div>
+      </div>
+
+      <div class="footer">
+        EGG-LABS archival output • static field report view
+      </div>
+    </div>
+  </div>
+
+  <!-- Optional shared frontend config -->
+  <script src="../js/config.js"></script>
+
+  <script>
+    const API_BASE =
+      (window.EGGHUNT_CONFIG && window.EGGHUNT_CONFIG.API_URL) ||
+      "PASTE_YOUR_GAS_WEB_APP_URL_HERE";
+
+    function escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function getSampleFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      return String(params.get("sample") || "").trim();
+    }
+
+    function sampleToGradeClass(sampleData) {
+      const grade = String((sampleData && sampleData.grade) || "").toLowerCase();
+      if (grade === "gold" || grade === "silver" || grade === "bronze") return grade;
+      return "";
+    }
+
+    async function fetchPrize(sample) {
+      const url = new URL(API_BASE);
+      url.searchParams.set("action", "prize");
+      url.searchParams.set("sample", sample);
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store"
+      });
+
+      const text = await res.text();
+      if (text.trim().startsWith("<")) {
+        throw new Error("API returned HTML instead of JSON.");
+      }
+
+      return JSON.parse(text);
+    }
+
+    function renderError(message) {
+      document.getElementById("content").innerHTML = `
+        <div class="error-box">
+          <strong>Specimen record unavailable.</strong><br><br>
+          ${escapeHtml(message)}
+        </div>
+      `;
+    }
+
+    function renderReport(data) {
+      const sample = escapeHtml(data.sample || "");
+      const placement = Number(data.placement || 0);
+      const grade = String(data.grade || "").toUpperCase();
+      const team = escapeHtml(data.team || "Unknown Team");
+      const score = Number(data.score || 0).toLocaleString();
+      const members = Array.isArray(data.members) ? data.members : [];
+      const gradeClass = sampleToGradeClass(data);
+
+      document.getElementById("statusSample").textContent = data.sample || "—";
+      document.getElementById("statusPlacement").textContent = placement ? `#${placement}` : "—";
+      document.getElementById("statusScore").textContent = score;
+
+      document.getElementById("content").innerHTML = `
+        <section class="section">
+          <h2>🔬 Specimen Identification</h2>
+          <dl class="kv">
+            <dt>Sample ID:</dt>
+            <dd>${sample}</dd>
+
+            <dt>Classification:</dt>
+            <dd>Jëlliebean Field Cluster</dd>
+
+            <dt>Origin:</dt>
+            <dd>Active Cadburrion substrate formation</dd>
+
+            <dt>Grade:</dt>
+            <dd><span class="grade ${gradeClass}">${escapeHtml(grade)}</span></dd>
+
+            <dt>Containment Status:</dt>
+            <dd>Stable (for now)</dd>
+          </dl>
+        </section>
+
+        <section class="section">
+          <h2>🧑‍🔬 Recovery Record</h2>
+          <div class="note-block">Collected by:</div>
+          <dl class="kv" style="margin-top:10px;">
+            <dt>Team Name:</dt>
+            <dd>${team}</dd>
+
+            <dt>Field Agents:</dt>
+            <dd>
+              ${
+                members.length
+                  ? `<ul class="agents">${members.map(name => `<li>${escapeHtml(name)}</li>`).join("")}</ul>`
+                  : `<div>No field agents logged.</div>`
+              }
+            </dd>
+          </dl>
+        </section>
+
+        <section class="section">
+          <h2>🌈 Field Origin Report</h2>
+          <div class="note-block">This specimen was harvested from a localized jëlliebean field bloom,
+a naturally occurring concentration of Cadburrion particles exhibiting:
+
+Color clustering behavior
+Pattern coherence (Node / Band / Waveform)
+Elevated yield potential under first-contact conditions
+
+Jëlliebean fields are not decorative.
+They are active substrate formations.</div>
+        </section>
+
+        <section class="section">
+          <h2>⚠️ Hazard Classification</h2>
+          <div class="note-block">Primary Risks:
+
+Chromatic instability within localized clusters
+Low-level peepochron emissions
+Unpredictable interaction with observer expectation
+
+Documented Exposure Effects:
+
+Spontaneous self-cloning (typically short-lived)
+Interdimensional slippage (mild to moderate)
+Acute gastrointestinal distress (duration varies)
+Temporal misalignment of personal timeline
+Brief perception of additional, unregistered eggs</div>
+        </section>
+
+        <section class="section">
+          <h2>☣️ Handling Guidelines</h2>
+          <div class="note-block">Store in approved containment vessels (glass beakers preferred)
+Approved plastic bags are also acceptable for transport
+Avoid mixing specimens from competing teams without supervision
+Do not agitate clusters unnecessarily
+If specimen begins to hum, do not attempt to harmonize</div>
+        </section>
+
+        <section class="section">
+          <h2>🧬 Anomalous Properties</h2>
+          <div class="note-block">Demonstrates first-contact amplification
+Appears to stabilize once observed
+May subtly influence nearby decision-making processes</div>
+        </section>
+
+        <section class="section">
+          <h2>📊 Yield Assessment</h2>
+          <dl class="kv">
+            <dt>Data Yield Classification:</dt>
+            <dd>Exceptional</dd>
+
+            <dt>Field Density Tier:</dt>
+            <dd>High</dd>
+
+            <dt>Extraction Quality:</dt>
+            <dd>Clean</dd>
+          </dl>
+        </section>
+
+        <section class="section">
+          <h2>🛰️ Field Notes</h2>
+          <div class="note-block">“The jëlliebean field briefly stabilized during extraction.
+This condition was not sustained.”</div>
+        </section>
+
+        <section class="section">
+          <h2>🔗 Registry Status</h2>
+          <div class="registry-box">
+            This specimen has been logged in the<br>
+            <strong>EGG-LABS Specimen Registry</strong>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>⚠️ Consumption Advisory</h2>
+          <div class="advisory-box">
+            Consumption of jëlliebean field material is not strictly prohibited.
+          </div>
+        </section>
+      `;
+    }
+
+    async function init() {
+      const sample = getSampleFromQuery();
+
+      if (!sample) {
+        renderError("Missing sample parameter. Expected a URL like ?sample=001");
+        return;
+      }
+
+      if (!/^00[1-3]$/.test(sample)) {
+        renderError("Invalid sample parameter. Expected 001, 002, or 003.");
+        return;
+      }
+
+      if (!API_BASE || API_BASE === "PASTE_YOUR_GAS_WEB_APP_URL_HERE") {
+        renderError("API_BASE is not configured.");
+        return;
+      }
+
+      document.getElementById("statusSample").textContent = sample;
+
+      try {
+        const data = await fetchPrize(sample);
+
+        if (!data || !data.ok) {
+          renderError((data && data.error) || "No specimen record available yet.");
+          return;
+        }
+
+        renderReport(data);
+      } catch (err) {
+        renderError(err.message || "Failed to load specimen record.");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
