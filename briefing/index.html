@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operation E.G.G. Briefing</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(15, 23, 42, 0.88);
+      --panel-2: rgba(30, 41, 59, 0.82);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #e5eefc;
+      --muted: #9fb3d1;
+      --accent: #f5d94e;
+      --accent-2: #8fd3ff;
+      --danger: #ff8d8d;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(143, 211, 255, 0.12), transparent 30%),
+        radial-gradient(circle at top right, rgba(245, 217, 78, 0.10), transparent 25%),
+        linear-gradient(180deg, #060a14 0%, #0b1020 100%);
+      color: var(--text);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 18px;
+    }
+
+    .frame {
+      width: 100%;
+      max-width: 980px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      position: relative;
+    }
+
+    .frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, rgba(255,255,255,0.35), transparent);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      margin: 0;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid rgba(143, 211, 255, 0.25);
+      border-radius: 999px;
+      background: rgba(143, 211, 255, 0.08);
+      color: var(--accent-2);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 16px rgba(143, 211, 255, 0.8);
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.35fr 0.85fr;
+      gap: 0;
+    }
+
+    .main {
+      padding: 28px;
+      border-right: 1px solid var(--line);
+    }
+
+    .side {
+      padding: 28px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    }
+
+    .video-card {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .video-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(0,0,0,0.18);
+    }
+
+    .video-label {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .video-classification {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--danger);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .video-shell {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background:
+        radial-gradient(circle at center, rgba(143, 211, 255, 0.08), transparent 45%),
+        linear-gradient(180deg, #0c1325 0%, #08101d 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .video-shell video,
+    .video-shell iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: #000;
+    }
+
+    .placeholder {
+      width: 100%;
+      height: 100%;
+      border: 1px dashed rgba(255,255,255,0.15);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 18px 18px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .section p {
+      margin: 0;
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .meta-item {
+      padding: 14px 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .meta-k {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .meta-v {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .actions {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      padding: 14px 18px;
+      text-decoration: none;
+      border-radius: 14px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      color: #101522;
+      background: linear-gradient(180deg, #ffe97a 0%, #f5d94e 100%);
+      box-shadow: 0 10px 24px rgba(245, 217, 78, 0.25);
+    }
+
+    .btn-secondary {
+      color: var(--text);
+      background: rgba(143, 211, 255, 0.08);
+      border: 1px solid rgba(143, 211, 255, 0.2);
+    }
+
+    .footer-note {
+      margin-top: 22px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    @media (max-width: 860px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .main {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .title {
+        font-size: 24px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      body {
+        padding: 14px;
+      }
+
+      .main,
+      .side {
+        padding: 18px;
+      }
+
+      .title {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">
+        <div class="eyebrow">Operation E.G.G.</div>
+        <h1 class="title">Field Briefing</h1>
+      </div>
+      <div class="status">
+        <span class="status-dot"></span>
+        Transmission Ready
+      </div>
+    </div>
+
+    <div class="content">
+      <main class="main">
+        <div class="video-card">
+          <div class="video-header">
+            <div class="video-label">Briefing Feed</div>
+            <div class="video-classification">Authorized Personnel Only</div>
+          </div>
+
+          <div class="video-shell">
+            <!-- OPTION 1: local video file -->
+            <!--
+            <video controls poster="briefing-poster.jpg">
+              <source src="briefing-video.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+            -->
+
+            <!-- OPTION 2: embedded video iframe -->
+            <!--
+            <iframe
+              src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
+              title="Operation E.G.G. Briefing Video"
+              allowfullscreen>
+            </iframe>
+            -->
+
+            <!-- Placeholder shown until you swap in video -->
+      <iframe width="560" height="315" src="https://www.youtube.com/embed/iatJYfavaJ8?si=kuOFFHoRY-YgvPGk" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Mission Summary</h2>
+          <p>
+            Welcome, field team. Review the briefing in full before deployment.
+            Once instructions have been received and understood, proceed to the live
+            operation interface to begin the hunt.
+          </p>
+        </div>
+      </main>
+
+      <aside class="side">
+        <div class="meta-list">
+          <div class="meta-item">
+            <span class="meta-k">Operation</span>
+            <span class="meta-v">Emergent Ground-state Genesis</span>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-k">Division</span>
+            <span class="meta-v">Field Research & Retrieval</span>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-k">Briefing Type</span>
+            <span class="meta-v">Pre-Deployment Video Packet</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="https://operationegg.beanboy.biz">
+            Begin Operations
+          </a>
+
+         </div>
+
+        <div class="footer-note">
+          Confirm all team members have received this material before field entry.
+          Unauthorized jellybean exposure remains a manageable but non-zero risk.
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>
